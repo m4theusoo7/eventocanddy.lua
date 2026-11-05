@@ -1,14 +1,16 @@
 -- Serviços necessários
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
 -- Configurações
 local FARM_ACTIVE = true
-local HIT_DELAY = 0.1 -- Intervalo rápido entre os cliques
+local TRAVEL_SPEED = 250 -- Velocidade de voo entre as ilhas (studs por segundo)
+local HIT_DELAY = 0.15   -- Velocidade dos cliques para quebrar
 
--- Função para encontrar a abóbora mais próxima
+-- Função para encontrar a abóbora mais próxima (independente da ilha)
 local function getNearestPumpkin()
     local character = LocalPlayer.Character
     if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
@@ -33,7 +35,7 @@ local function getNearestPumpkin()
     return nearest
 end
 
--- Função para garantir que o soco/arma está equipado
+-- Função para equipar a ferramenta (soco/estilo de luta)
 local function equipTool()
     local character = LocalPlayer.Character
     if not character then return end
@@ -50,43 +52,78 @@ local function equipTool()
     end
 end
 
--- Função de Auto Click usando o VirtualInputManager (simula o clique físico na tela)
-local function clickMouse()
+-- Função para simular o clique que quebra a abóbora
+local function hitPumpkin()
     local vim = VirtualInputManager
     local viewportSize = Workspace.CurrentCamera.ViewportSize
     local centerX = viewportSize.X / 2
     local centerY = viewportSize.Y / 2
     
-    -- Simula pressionar e soltar o botão esquerdo no centro da tela (onde o personagem ataca)
+    -- Simula clique do mouse
     vim:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
-    task.wait(0.02)
+    task.wait(0.05)
     vim:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
 end
 
--- Loop principal de farm e quebra
+-- Função de voo suave (Tween) para viajar entre ilhas
+local function flyToTarget(targetCFrame)
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local rootPart = character.HumanoidRootPart
+    local distance = (rootPart.Position - targetCFrame.Position).Magnitude
+    local timeToTravel = distance / TRAVEL_SPEED
+    
+    -- Se estiver muito perto, apenas teletransporta
+    if distance < 30 then
+        rootPart.CFrame = targetCFrame
+        return
+    end
+    
+    local tweenInfo = TweenInfo.new(timeToTravel, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = targetCFrame})
+    
+    tween:Play()
+    return tween
+end
+
+-- Loop principal de Farm entre Ilhas
 task.spawn(function()
     while FARM_ACTIVE do
-        task.wait(0.05)
+        task.wait(0.1)
         
         local character = LocalPlayer.Character
         if character and character:FindFirstChild("HumanoidRootPart") then
-            local rootPart = character.HumanoidRootPart
             local targetPumpkin = getNearestPumpkin()
             
             if targetPumpkin then
-                -- Fica focado na abóbora até ela sumir do jogo
+                -- 1. Viaja até a ilha/local onde a abóbora está
+                local destination = targetPumpkin.CFrame + Vector3.new(0, 3, 0)
+                local currentTween = flyToTarget(destination)
+                
+                -- Aguarda chegar na abóbora
+                if currentTween then
+                    while currentTween.PlaybackState == Enum.PlaybackState.Playing and targetPumpkin.Parent and FARM_ACTIVE do
+                        task.wait(0.05)
+                    end
+                end
+                
+                -- 2. Fica batendo até quebrar a abóbora atual
                 while targetPumpkin and targetPumpkin.Parent and FARM_ACTIVE do
                     equipTool()
                     
-                    -- Posiciona o personagem colado na abóbora
-                    rootPart.CFrame = targetPumpkin.CFrame + Vector3.new(0, 3, 0)
+                    -- Mantém o personagem colado na abóbora
+                    local rootPart = character:FindFirstChild("HumanoidRootPart")
+                    if rootPart then
+                        rootPart.CFrame = targetPumpkin.CFrame + Vector3.new(0, 2, 0)
+                    end
                     
-                    -- Dispara o Auto Click
-                    clickMouse()
+                    -- Ataca
+                    hitPumpkin()
                     
                     task.wait(HIT_DELAY)
                     
-                    -- Se a abóbora quebrou/desapareceu, sai do loop para ir na próxima
+                    -- Se a abóbora quebrou, sai do loop para procurar a próxima
                     if not targetPumpkin.Parent then
                         break
                     end

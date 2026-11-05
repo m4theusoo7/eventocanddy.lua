@@ -1,12 +1,12 @@
--- Serviços
+-- Serviços necessários
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 local LocalPlayer = Players.LocalPlayer
 
 -- Configurações
 local FARM_ACTIVE = true
-local HIT_DELAY = 0.15 -- Intervalo entre os cliques
+local HIT_DELAY = 0.1 -- Intervalo rápido entre os cliques
 
 -- Função para encontrar a abóbora mais próxima
 local function getNearestPumpkin()
@@ -33,7 +33,7 @@ local function getNearestPumpkin()
     return nearest
 end
 
--- Função para equipar a primeira ferramenta disponível (soco, estilo de luta ou espada)
+-- Função para garantir que o soco/arma está equipado
 local function equipTool()
     local character = LocalPlayer.Character
     if not character then return end
@@ -50,27 +50,23 @@ local function equipTool()
     end
 end
 
--- Função para simular o clique/soco de forma que o jogo registre
-local function simulateClick()
-    local character = LocalPlayer.Character
-    if character then
-        local tool = character:FindFirstChildOfClass("Tool")
-        if tool then
-            -- Ativa a ferramenta se ela existir
-            tool:Activate()
-        end
-    end
+-- Função de Auto Click usando o VirtualInputManager (simula o clique físico na tela)
+local function clickMouse()
+    local vim = VirtualInputManager
+    local viewportSize = Workspace.CurrentCamera.ViewportSize
+    local centerX = viewportSize.X / 2
+    local centerY = viewportSize.Y / 2
     
-    -- Simula o clique do mouse na tela para garantir o golpe
-    VirtualUser:Button1Down(Vector2.new(0, 0))
-    task.wait(0.05)
-    VirtualUser:Button1Up(Vector2.new(0, 0))
+    -- Simula pressionar e soltar o botão esquerdo no centro da tela (onde o personagem ataca)
+    vim:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+    task.wait(0.02)
+    vim:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
 end
 
--- Loop principal
+-- Loop principal de farm e quebra
 task.spawn(function()
     while FARM_ACTIVE do
-        task.wait(0.1)
+        task.wait(0.05)
         
         local character = LocalPlayer.Character
         if character and character:FindFirstChild("HumanoidRootPart") then
@@ -78,19 +74,19 @@ task.spawn(function()
             local targetPumpkin = getNearestPumpkin()
             
             if targetPumpkin then
-                -- Fica focado na abóbora atual até que ela quebre
+                -- Fica focado na abóbora até ela sumir do jogo
                 while targetPumpkin and targetPumpkin.Parent and FARM_ACTIVE do
                     equipTool()
                     
                     -- Posiciona o personagem colado na abóbora
-                    rootPart.CFrame = targetPumpkin.CFrame + Vector3.new(0, 2, 0)
+                    rootPart.CFrame = targetPumpkin.CFrame + Vector3.new(0, 3, 0)
                     
-                    -- Executa o ataque simulado
-                    simulateClick()
+                    -- Dispara o Auto Click
+                    clickMouse()
                     
                     task.wait(HIT_DELAY)
                     
-                    -- Se a abóbora sumiu, sai do loop interno para ir para a próxima
+                    -- Se a abóbora quebrou/desapareceu, sai do loop para ir na próxima
                     if not targetPumpkin.Parent then
                         break
                     end

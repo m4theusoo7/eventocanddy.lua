@@ -1,74 +1,61 @@
-local Players = game:GetService("Players")
-local Player = Players.LocalPlayer
-local Mouse = Player.Character:FindFirstChild("HumanoidRootPart").Parent:WaitForChild("HumanoidRootPart"):FindFirstChild("HumanoidRootPart") -- Correção para encontrar a raiz do personagem
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local rootpart = character:FindFirstChild("HumanoidRootPart")
+local humanoid = character:FindFirstChild("Humanoid")
 
 -- Configurações
-local TargetName = "Pumpkin" -- Nome do objeto (pode ser Pumpkin, Pumpkin_01, etc.)
-local Range = 25 -- Distância máxima para detectar a abóbora
-local Speed = 16 -- Velocidade de movimento (quanto maior, mais rápido)
+local speed = 16 -- Velocidade de movimento (quanto maior, mais rápido)
+local attackDistance = 8 -- Distância para atacar/interagir
+local pumpkinName = "Pumpkin" -- Nome da abóbora (pode ser "Halloween_Pumpkin", etc.)
 
--- Função principal
-local function FindAndInteract()
-    local Character = Player.Character or Player.CharacterAdded:Wait()
+-- Função para encontrar a abóbora mais próxima
+local function FindNearestPumpkin()
+    local target = workspace:FindFirstChild(pumpkinName)
     
-    -- Espera o personagem ter uma raiz (HumanoidRootPart)
-    local RootPart = Character:FindFirstChild("HumanoidRootPart")
-    if not RootPart then return end
-
-    -- Procura objetos com "Pumpkin" no nome na área ao redor
-    local Target = nil
-    
-    for _, obj in ipairs(game:GetService("Workspace"):GetDescendants()) do
-        if string.find(obj.Name, TargetName) and obj:IsA("Model") or obj:IsA("Part") then
-            -- Verifica se está dentro da distância
-            if RootPart:DistanceTo(obj.Position) <= Range then
-                Target = obj
-                break
+    if not target then
+        for _, child in ipairs(workspace:GetDescendants()) do
+            -- Procura por qualquer coisa que tenha "Pumpkin" no nome
+            if string.find(child.Name, pumpkinName) and child:IsA("Part") or child:IsA("Model") then
+                return child
             end
         end
     end
-
-    if Target then
-        print("[Auto-Pumpkin] Encontrado! Movendo para a posição...")
-        
-        -- Move o personagem até o objeto
-        local function MoveTowards()
-            if not RootPart or not Target then return end
-            
-            local CurrentPos = RootPart.Position
-            local TargetPos = Target.PrimaryPart and Target.PrimaryPart.Position or Target.Position
-            
-            if (CurrentPos - TargetPos).Magnitude < 5 then
-                print("[Auto-Pumpkin] Chegou perto! Interagindo...")
-                
-                -- Tenta clicar no objeto para quebrar/interagir
-                local Clicked = Mouse:FireAtTarget(Target)
-                if Clicked then
-                    print("[Auto-Pumpkin] Quebrado!")
-                end
-                
-                -- Pequeno delay antes de procurar outra
-                task.wait(2)
-            else
-                RootPart.CFrame = CFrame.new(CurrentPos + (TargetPos - CurrentPos).Unit * 5, CurrentPos.Y) -- Move um pouco para frente
-                task.wait(0.1)
-            end
-            
-            -- Loop contínuo
-            if Target then
-                task.delay(0.1, MoveTowards)
-            else
-                FindAndInteract() -- Tenta encontrar outra abóbora se esta for quebrada
-            end
-        end
-        
-        MoveTowards()
-    else
-        print("[Auto-Pumpkin] Procurando...")
-        task.wait(1)
-        FindAndInteract()
-    end
+    
+    return target
 end
 
--- Inicia o script
-task.delay(2, FindAndInteract)
+-- Loop principal do script
+while true do
+    local target = FindNearestPumpkin()
+    
+    if target and rootpart and humanoid then
+        -- Verifica distância
+        local distance = (rootpart.Position - target.Position).Magnitude
+        
+        if distance <= attackDistance then
+            print("🎃 Abóbora encontrada! Atacando...")
+            
+            -- Lógica de ataque: 
+            -- Se for apenas colisão, o personagem já vai bater.
+            -- Se precisar usar uma habilidade específica (ex: Rapid Punch), descomente abaixo:
+            -- humanoid:ChangeState(2) -- Muda para estado de ataque
+            
+            -- Move o personagem até a posição exata da abóbora
+            rootpart.CFrame = CFrame.new(target.Position, target.Position + Vector3.new(0, 1.5, 0))
+            
+            -- Pequeno delay para garantir que bateu antes de procurar outra
+            wait(2) 
+        else
+            -- Se estiver longe, move em direção à abóbora
+            local direction = (target.Position - rootpart.Position).Unit
+            rootpart:MoveTo(rootpart.Position + direction * speed)
+            
+            -- Mantém o personagem olhando para a abóbora
+            humanoid.HumanoidRootPart.CFrame = CFrame.new(rootpart.Position, target.Position)
+        end
+        
+    else
+        print("🔍 Procurando abóboras...")
+        wait(5) -- Espera 5 segundos se não encontrar nenhuma
+    end
+end

@@ -1,93 +1,53 @@
-local PUMPKIN_NAME = "Pumpkin"
-local FLY_SPEED = 75
+task.spawn(function()
+    print("Auto-Farm de Candy Carregado!")
+    
+    local Players = game:GetService("Players")
+    local TweenService = game:GetService("TweenService")
+    local localPlayer = Players.LocalPlayer
+    
+    _G.FarmAtivo = true
 
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local localPlayer = Players.LocalPlayer
-local farmActive = false
-
-local function equipWeapon()
-    local character = localPlayer.Character
-    if not character then return nil end
-    
-    local currentTool = character:FindFirstChildWhichIsA("Tool")
-    if currentTool then return currentTool end
-    
-    local backpack = localPlayer:FindFirstChild("Backpack")
-    if backpack then
-        local tool = backpack:FindFirstChildWhichIsA("Tool")
-        if tool then
-            tool.Parent = character
-            return tool
-        end
-    end
-    return nil
-end
-
-local function moveToCFrame(targetCFrame)
-    local character = localPlayer.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
-    
-    local distance = (rootPart.Position - targetCFrame.Position).Magnitude
-    local duration = distance / FLY_SPEED
-    
-    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = targetCFrame})
-    
-    tween:Play()
-    tween.Completed:Wait()
-end
-
-local function attackTarget()
-    local weapon = equipWeapon()
-    if weapon then
-        weapon:Activate()
-    end
-end
-
-local function startFarmLoop()
-    farmActive = true
-    print("Farm Started")
-    
-    while farmActive do
-        local foundItem = false
+    while _G.FarmAtivo do
+        local achouItem = false
         
-        for _, object in pairs(workspace:GetDescendants()) do
-            if not farmActive then break end
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if not _G.FarmAtivo then break end
             
-            if string.find(object.Name:lower(), "pumpkin") or string.find(object.Name:lower(), "candy") then
-                local targetPart = object:IsA("BasePart") and object or object:FindFirstChildWhichIsA("BasePart")
+            if string.find(obj.Name:lower(), "pumpkin") or string.find(obj.Name:lower(), "candy") then
+                local parte = obj:IsA("BasePart") and obj or obj:FindFirstChildWhichIsA("BasePart")
                 
-                if targetPart and targetPart.Parent then
-                    foundItem = true
+                if parte and parte.Parent and parte:IsDescendantOf(workspace) then
+                    achouItem = true
                     
-                    while farmActive and targetPart and targetPart:IsDescendantOf(workspace) do
-                        moveToCFrame(targetPart.CFrame * CFrame.new(0, 0.5, 0))
-                        attackTarget()
+                    -- Loop para bater na abóbora até ela sumir do mapa
+                    while _G.FarmAtivo and parte and parte:IsDescendantOf(workspace) do
+                        -- Garante ferramenta equipada
+                        local char = localPlayer.Character
+                        if char and not char:FindFirstChildWhichIsA("Tool") then
+                            local mochila = localPlayer:FindFirstChild("Backpack")
+                            local tool = mochila and mochila:FindFirstChildWhichIsA("Tool")
+                            if tool then tool.Parent = char end
+                        end
+                        
+                        -- Move o jogador colado no item
+                        local root = char and char:FindFirstChild("HumanoidRootPart")
+                        if root then
+                            local dist = (root.Position - parte.Position).Magnitude
+                            local tempo = dist / 70
+                            local info = TweenInfo.new(tempo, Enum.EasingStyle.Linear)
+                            TweenService:Create(root, info, {CFrame = parte.CFrame * CFrame.new(0, 0.5, 0)}):Play()
+                        end
+                        
+                        -- Simula o ataque M1 de forma direta
+                        local ferramenta = char and char:FindFirstChildWhichIsA("Tool")
+                        if ferramenta then ferramenta:Activate() end
+                        
                         task.wait(0.1)
                     end
                 end
             end
         end
         
-        if not foundItem then
-            task.wait(3)
-        end
-    end
-end
-
-localPlayer.Chatted:Connect(function(message)
-    local cmd = message:lower()
-    if cmd == "!farm" then
-        if not farmActive then
-            task.spawn(startFarmLoop)
-        else
-            farmActive = false
-            print("Farm Disabled")
-        end
-    elseif cmd == "!stop" then
-        farmActive = false
-        print("Farm Stopped")
+        if not achouItem then task.wait(2) end
     end
 end)

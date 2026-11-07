@@ -1,105 +1,74 @@
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local RootPart = Character:FindFirstChildWhichIsA("BasePlate") -- Tenta achar a parte base (geralmente Torso ou Head)
+local Mouse = Player.Character:FindFirstChild("HumanoidRootPart").Parent:WaitForChild("HumanoidRootPart"):FindFirstChild("HumanoidRootPart") -- Correção para encontrar a raiz do personagem
 
--- --- CONFIGURAÇÕES ---
-local Speed = 150 -- Velocidade de movimento
-local JumpPower = 60 -- Força do pulo
-local Range = 25 -- Distância para detectar itens/objetos
-local Cooldown = 0.5 -- Tempo entre quebras (para não gastar muita energia)
+-- Configurações
+local TargetName = "Pumpkin" -- Nome do objeto (pode ser Pumpkin, Pumpkin_01, etc.)
+local Range = 25 -- Distância máxima para detectar a abóbora
+local Speed = 16 -- Velocidade de movimento (quanto maior, mais rápido)
 
--- Nome da sua habilidade de ataque (Ex: "Maestria", "Ataque Rápido", etc.)
--- Se não tiver certeza, tente "Maestria" primeiro
-local AbilityName = "Maestria" 
-
--- Variáveis de Controle
-local lastTouchTime = 0
-local isJumping = false
-
--- Função para mover o personagem até um alvo (se a parte base existir)
-function MoveToTarget(targetPart, targetCFrame)
-    if not RootPart then return end -- Se não achar a parte base, sai da função
+-- Função principal
+local function FindAndInteract()
+    local Character = Player.Character or Player.CharacterAdded:Wait()
     
-    local direction = (targetPart.Position - RootPart.Position).Unit * Speed
-    Humanoid.WalkSpeed = math.min(Humanoid.WalkSpeed + 10, 350) -- Aumenta a velocidade
-    
-    if not isJumping then
-        Humanoid.Jump = JumpPower
-        isJumping = true
-    end
+    -- Espera o personagem ter uma raiz (HumanoidRootPart)
+    local RootPart = Character:FindFirstChild("HumanoidRootPart")
+    if not RootPart then return end
 
-    RootPart.CFrame = CFrame.new(RootPart.Position + direction) * targetCFrame
-end
-
--- Função para quebrar objetos (Auto-Break)
-function BreakObject(part, abilityName)
-    -- Verifica se a habilidade existe e está ativa no personagem
-    local abilityInstance = Character:FindFirstChild(abilityName) or Humanoid:FindFirstChild(abilityName)
+    -- Procura objetos com "Pumpkin" no nome na área ao redor
+    local Target = nil
     
-    if abilityInstance and not isJumping then
-        abilityInstance:Fire()
-        lastTouchTime = tick()
-        
-        -- Ajuste de velocidade para o ataque (opcional, se quiser correr mais rápido ao atacar)
-        Humanoid.WalkSpeed = 200
-        
-        return true
-    end
-    return false
-end
-
--- Loop Principal do Farm
-while true do
-    wait(0.1) -- Verifica a cada 0.1 segundos
-    
-    local currentTime = tick()
-    
-    -- 1. Coleta de Itens (Tokens, Frutas, Orbes)
-    local touchingParts = RootPart:GetTouchingParts()
-    for _, part in ipairs(touchingParts) do
-        if part.Parent ~= Character and part.Name:find("Item") or part.Name:find("Token") then
-            -- Se estiver tocando em um item, pule para pegar
-            MoveToTarget(part, CFrame.new(RootPart.Position + (part.Position - RootPart.Position).Unit * 2))
-        end
-    end
-
-    -- 2. Quebra de Objetos (Caixas, Rochas, etc.)
-    local nearestPart = nil
-    local nearestDistance = math.huge
-    
-    for _, part in ipairs(RootPart:GetTouchingParts()) do
-        if not part.Parent:FindFirstChild("Item") and not part.Name:find("Token") then
-            -- Se não for um item comum, pode ser uma caixa ou rocha para quebrar
-            local dist = (part.Position - RootPart.Position).Magnitude
-            if dist < Range and dist < nearestDistance then
-                nearestPart = part
-                nearestDistance = dist
+    for _, obj in ipairs(game:GetService("Workspace"):GetDescendants()) do
+        if string.find(obj.Name, TargetName) and obj:IsA("Model") or obj:IsA("Part") then
+            -- Verifica se está dentro da distância
+            if RootPart:DistanceTo(obj.Position) <= Range then
+                Target = obj
+                break
             end
         end
     end
 
-    -- Se encontrar um objeto próximo, tenta quebrar
-    if nearestPart and currentTime - lastTouchTime > Cooldown then
-        MoveToTarget(nearestPart, CFrame.new(RootPart.Position + (nearestPart.Position - RootPart.Position).Unit * 2))
+    if Target then
+        print("[Auto-Pumpkin] Encontrado! Movendo para a posição...")
         
-        -- Tenta usar a habilidade de ataque
-        if BreakObject(nearestPart, AbilityName) then 
-            -- Se o script da Maestria não funcionar automaticamente, você pode precisar ajustar o nome da Ability
-            -- Exemplo para Ataque Rápido: BreakObject(nearestPart, "Ataque Rápido")
+        -- Move o personagem até o objeto
+        local function MoveTowards()
+            if not RootPart or not Target then return end
+            
+            local CurrentPos = RootPart.Position
+            local TargetPos = Target.PrimaryPart and Target.PrimaryPart.Position or Target.Position
+            
+            if (CurrentPos - TargetPos).Magnitude < 5 then
+                print("[Auto-Pumpkin] Chegou perto! Interagindo...")
+                
+                -- Tenta clicar no objeto para quebrar/interagir
+                local Clicked = Mouse:FireAtTarget(Target)
+                if Clicked then
+                    print("[Auto-Pumpkin] Quebrado!")
+                end
+                
+                -- Pequeno delay antes de procurar outra
+                task.wait(2)
+            else
+                RootPart.CFrame = CFrame.new(CurrentPos + (TargetPos - CurrentPos).Unit * 5, CurrentPos.Y) -- Move um pouco para frente
+                task.wait(0.1)
+            end
+            
+            -- Loop contínuo
+            if Target then
+                task.delay(0.1, MoveTowards)
+            else
+                FindAndInteract() -- Tenta encontrar outra abóbora se esta for quebrada
+            end
         end
+        
+        MoveTowards()
+    else
+        print("[Auto-Pumpkin] Procurando...")
+        task.wait(1)
+        FindAndInteract()
     end
-
-    -- 3. Ajuste de Velocidade Base (para não ficar muito lento)
-    if Humanoid.WalkSpeed < 150 then
-        Humanoid.WalkSpeed = math.min(Humanoid.WalkSpeed + 2, 150)
-    end
-    
-    -- Pulo automático se estiver correndo rápido e perto do chão (opcional para farmar)
-    if currentTime - lastTouchTime < 0.3 and not isJumping then
-        Humanoid.Jump = JumpPower
-        isJumping = true
-    end
-
 end
+
+-- Inicia o script
+task.delay(2, FindAndInteract)

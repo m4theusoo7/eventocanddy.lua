@@ -3,19 +3,22 @@ local Player = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local Torso = Character:WaitForChild("Torso")
-local RootPart = Torso:FindFirstChildWhichIsA("BasePlate") -- Ajuste se for outra parte base
 
--- Configurações
+-- --- CONFIGURAÇÕES ---
 local Speed = 150 -- Velocidade de movimento (quanto maior, mais rápido)
 local JumpPower = 60 -- Força do pulo
 local Range = 25 -- Distância para detectar itens/objetos
 local Cooldown = 0.5 -- Tempo entre quebras (para não gastar muita energia)
 
+-- Nome da sua habilidade de ataque (ex: "Maestria", "Ataque Rápido", etc.)
+-- Se não tiver certeza, tente "Maestria" ou "Ataque Rápido" primeiro
+local AbilityName = "Maestria" 
+
 -- Variáveis de Controle
 local lastTouchTime = 0
 local isJumping = false
 
--- Função para mover o personagem
+-- Função para mover o personagem até um alvo
 function MoveToTarget(targetPart, targetCFrame)
     local direction = (targetPart.Position - Torso.Position).Unit * Speed
     Humanoid.WalkSpeed = math.min(Humanoid.WalkSpeed + 10, 350) -- Aumenta a velocidade
@@ -80,7 +83,7 @@ while true do
         MoveToTarget(nearestPart, CFrame.new(Torso.Position + (nearestPart.Position - Torso.Position).Unit * 2))
         
         -- Tenta usar a habilidade de ataque (ex: "Maestria" ou "Ataque Rápido")
-        if BreakObject(nearestPart, "Maestria") then 
+        if BreakObject(nearestPart, AbilityName) then 
             -- Se o script da Maestria não funcionar automaticamente, você pode precisar ajustar o nome da Ability
             -- Exemplo para Ataque Rápido: BreakObject(nearestPart, "Ataque Rápido")
         end

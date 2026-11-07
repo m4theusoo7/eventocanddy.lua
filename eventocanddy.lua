@@ -18,7 +18,7 @@ local Islands = {
 local CurrentIslandIndex = 1
 
 -- Função para Teleporte Suave (Padrão Delta)
-function Delta.MoveTo(target, speed)
+function MoveTo(target, speed)
     if not target then return end
     
     local rootPart = HumanoidRootPart or Character:FindFirstChild("HumanoidRootPart")
@@ -59,7 +59,7 @@ function Delta.MoveTo(target, speed)
 end
 
 -- Função para Atacar
-function Delta.Attack(target)
+function Attack(target)
     if not target then return end
     
     local Weapon = Character:FindFirstChild("RightHand") or Character:FindFirstChild("LeftHand")
@@ -102,7 +102,7 @@ while true do
         -- Tenta achar em outras ilhas ou teletransporta para uma nova coordenada
         local NewPos = Islands[(CurrentIslandIndex % #Islands) + 1]
         
-        Delta.MoveTo(NewPos, Speed * 2) -- Teleporte rápido para a próxima ilha
+        MoveTo(NewPos, Speed * 2) -- Teleporte rápido para a próxima ilha
         
         task.wait(3) -- Espera chegar na nova ilha
         CurrentIslandIndex = (CurrentIslandIndex % #Islands) + 1
@@ -111,13 +111,13 @@ while true do
         print("Item encontrado! Movendo...")
         
         -- Move até o item suavemente
-        Delta.MoveTo(Item, Speed)
+        MoveTo(Item, Speed)
         
         task.wait(0.5) -- Pequena pausa para alinhar
         
         -- Ataca até quebrar
         while Item and Item.Parent ~= workspace do
-            Delta.Attack(Item)
+            Attack(Item)
             
             -- Verifica se o item ainda existe (se foi coletado ou destruído)
             if not workspace:FindFirstChild(ItemName) then
@@ -139,7 +139,7 @@ while true do
         
         if ItemCount <= 0 then
             print("Sem mais itens na área. Trocando de ilha...")
-            Delta.MoveTo(Islands[CurrentIslandIndex], Speed * 2)
+            MoveTo(Islands[CurrentIslandIndex], Speed * 2)
             task.wait(3)
             CurrentIslandIndex = (CurrentIslandIndex % #Islands) + 1
         end

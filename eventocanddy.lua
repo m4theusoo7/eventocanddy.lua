@@ -1,14 +1,32 @@
--- CONFIGURAÇÕES PARA BLOX FRUITS
-local NOME_ABOBORA = "Pumpkin" -- Nome padrão usado pelo jogo para as abóboras
-local VELOCIDADE_VOAR = 60      -- Velocidade de locomoção entre as ilhas
+-- CONFIGURAÇÕES ADAPTADAS PARA O SEA 1
+local NOME_ABOBORA = "Pumpkin" 
+local VELOCIDADE_VOAR = 75     -- Um pouco mais rápido para navegar entre as ilhas do Sea 1
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local VirtualUser = game:GetService("VirtualUser") -- Serviço usado para simular cliques/ataques
+local VirtualUser = game:GetService("VirtualUser")
 local localPlayer = Players.LocalPlayer
 local farmAtivo = false
 
--- 1. FUNÇÃO PARA VOAR ATÉ A ABÓBORA
+-- 1. FUNÇÃO PARA GARANTIR QUE A ARMA ESTÁ NA MÃO
+local function equiparArma()
+	local character = localPlayer.Character
+	if not character then return end
+	
+	-- Se já tiver algo na mão, não faz nada
+	if character:FindFirstChildWhichIsA("Tool") then return end
+	
+	-- Procura a primeira arma/estilo de luta no seu inventário (Backpack) e equipa
+	local mochila = localPlayer:FindFirstChild("Backpack")
+	if mochila then
+		local ferramenta = mochila:FindFirstChildWhichIsA("Tool")
+		if ferramenta then
+			ferramenta.Parent = character
+		end
+	end
+end
+
+-- 2. FUNÇÃO DE MOVIMENTO (TWEEN)
 local function moverPara(destinoCFrame)
 	local character = localPlayer.Character
 	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -24,17 +42,16 @@ local function moverPara(destinoCFrame)
 	tween.Completed:Wait()
 end
 
--- 2. FUNÇÃO QUE FICA CLICANDO/ATACANDO
+-- 3. FUNÇÃO QUE EXECUTA O CLIQUE M1
 local function atacar()
-	-- Simula um clique na tela para acionar o ataque (M1) da sua fruta/espada equipada
 	VirtualUser:CaptureController()
 	VirtualUser:ClickButton1(Vector2.new(50, 50)) 
 end
 
--- 3. LOOP PRINCIPAL DO FARM
+-- 4. LOOP PRINCIPAL DO FARM DO EVENTO
 local function iniciarFarm()
 	farmAtivo = true
-	print("Auto-Farm de Abóboras com Ataque ATIVADO!")
+	print("Auto-Farm de Abóboras (Sea 1) ATIVADO!")
 	
 	while farmAtivo do
 		local aboboraAchada = false
@@ -42,33 +59,35 @@ local function iniciarFarm()
 		for _, objeto in pairs(workspace:GetDescendants()) do
 			if not farmAtivo then break end
 			
-			-- Verifica se o nome do objeto contém "Pumpkin"
-			if string.find(objeto.Name:lower(), "pumpkin") then
+			-- Procura o item no mapa
+			if string.find(objeto.Name:lower(), "pumpkin") or string.find(objeto.Name:lower(), "candy") then
 				local parteAlvo = objeto:IsA("BasePart") and objeto or objeto:FindFirstChildWhichIsA("BasePart")
 				
 				if parteAlvo and parteAlvo.Parent then
 					aboboraAchada = true
 					
-					-- Repete o ataque enquanto a abóbora ainda existir no mapa
+					-- Loop de ataque na abóbora atual
 					while farmAtivo and parteAlvo and parteAlvo:IsDescendantOf(workspace) do
-						-- Posiciona o jogador levemente acima ou na frente da abóbora para o golpe acertar
-						moverPara(parteAlvo.CFrame * CFrame.new(0, 1, 2)) 
+						equiparArma() -- Garante o soco/espada na mão
 						
-						atacar()          -- Executa o clique de ataque
-						task.wait(0.1)    -- Velocidade do clique (ajuste se estiver rápido/lento demais)
+						-- Teleporta exatamente em cima/colado para o soco Combat alcançar
+						moverPara(parteAlvo.CFrame * CFrame.new(0, 0.5, 0)) 
+						
+						atacar()
+						task.wait(0.08) -- Cliques rápidos
 					end
 				end
 			end
 		end
 		
-		-- Se limpou o mapa ou não achou nenhuma, aguarda o respawn
+		-- Se não achar abóboras nas ilhas próximas, espera o servidor carregar novas
 		if not aboboraAchada then
-			task.wait(2)
+			task.wait(3)
 		end
 	end
 end
 
--- 4. CONTROLE PELO CHAT (!farm para ligar/desligar e !stop para parar)
+-- CONTROLE NO CHAT
 localPlayer.Chatted:Connect(function(mensagem)
 	if mensagem:lower() == "!farm" then
 		if not farmAtivo then 

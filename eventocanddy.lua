@@ -1,224 +1,162 @@
--- Farm Pumpkin Adaptado | RemoteEvent + VirtualInputManager + ClickDetector/ProximityPrompt
--- Uso: cole no EXECUTOR (LocalScript) e aperte E para ligar/desligar
+--=====================================================
+-- CONFIGURAÇÕES - MUDE AQUI
+--=====================================================
+local Distancia = 5 -- Distância que ele fica da Pumpkin. MUDE SÓ ESSE NÚMERO
+local Delay = 0.15 -- Tempo de espera entre ataque e movimento. 0.15 é bom
+local Tecla = Enum.KeyCode.F -- Tecla para Ligar/Desligar. Pode trocar por Enum.KeyCode.R, G, etc
 
+--=====================================================
+-- SERVIÇOS
+--=====================================================
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local UIS = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VIM = game:GetService("VirtualInputManager")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager") -- usado para apertar a tecla de ataque
 
-local player = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer
 
--- CONFIG (troque aqui)
-local CONFIG = {
-	NomeAlvo = "Pumpkin",          -- nome exato no Explorer
-	VelocidadeTP = 200,
-	TeclaToggle = Enum.KeyCode.E,
-	RangeAtaque = 15,              -- força ataque só perto
-	Cooldown = 0.12,               -- cooldown do M1
-	TrocarLock = false,            -- true = trava a câmera no alvo
+local Ativo = false -- guarda se o script está ligado ou desligado
+local Executando = false -- evita abrir 2 loops ao mesmo tempo
 
-	-- RemoteEvent
-	UsarRemoteEvent = true,
-	RemotePath = nil,              -- ex: ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("HitEvent")
-	RemoteKeywords = {"Combat", "Hit", "Attack", "M1", "Damage", "Swing", "Click"},
-	-- Monte os args do seu jogo. Ex: return {parte} ou return {ferramenta, parte}
-	-- Use SimpleSpy/Hydroxide para descobrir os args reais e ajuste.
-	RemoteArgs = function(ferramenta, parte, alvo)
-		-- Descomente o que o seu jogo usa:
-		-- return parte
-		-- return ferramenta, parte
-		-- return "Hit", parte
-		return { parte } -- padrão
-	end,
+--=====================================================
+-- FUNÇÃO 1: Pegar meu personagem
+--=====================================================
+local function PegarPersonagem()
+	local personagem = LocalPlayer.Character
+	if not personagem then return nil, nil, nil end
 
-	-- Outros métodos
-	UsarClickDetector = true,      -- usa fireclickdetector (executor)
-	UsarProximityPrompt = true,    -- usa fireproximityprompt (executor)
-	UsarVirtualMouse = true,       -- usa VirtualInputManager (M1 simulado)
-	UsarToolActivate = true,       -- usa Tool:Activate() (fallback vanilla)
-}
+	local humanoid = personagem:FindFirstChildOfClass("Humanoid")
+	local hrp = personagem:FindFirstChild("HumanoidRootPart") -- HumanoidRootPart é o centro do corpo
 
-local Rodando = false
-
--- ========= HELPERS =========
-local function getChar()
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart")
-	local hum = char and char:FindFirstChildOfClass("Humanoid")
-	local ferramenta = char and char:FindFirstChildOfClass("Tool")
-	return char, root, hum, ferramenta
+	return personagem, humanoid, hrp
 end
 
-local function parteDaAbobora(obj)
-	if obj:IsA("BasePart") then
-		return obj
-	elseif obj:IsA("Model") then
-		return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true)
-	end
-	return nil
-end
+--=====================================================
+-- FUNÇÃO 2: Procurar a Pumpkin mais próxima no Workspace
+-- Funciona se a Pumpkin for uma Part ou um Model com Part dentro
+--=====================================================
+local function EncontrarPumpkinMaisProxima()
+	local _, _, hrp = PegarPersonagem()
+	if not hrp then return nil end
 
--- Descoberta automática do RemoteEvent (cache)
-local RemoteEventCache = nil
-local function acharRemoteEvent()
-	if RemoteEventCache and RemoteEventCache.Parent then
-		return RemoteEventCache
-	end
+	local melhor = nil -- vai guardar a Pumpkin mais próxima
+	local menorDistancia = math.huge -- começa com um número gigante
 
-	if CONFIG.RemotePath then
-		local ok, re = pcall(function()
-			return CONFIG.RemotePath
-		end)
-		if ok and re and re:IsA("RemoteEvent") then
-			RemoteEventCache = re
-			return re
-		end
-	end
+	-- Varre tudo que está no Workspace
+	for _, objeto in ipairs(workspace:GetDescendants()) do
+		if objeto.Name == "Pumpkin" then -- procura pelo nome exato [Pumpkin]
+			local parte = nil
 
-	-- varre ReplicatedStorage procurando keyword no nome
-	local candidatos = {}
-	for _, v in ipairs(ReplicatedStorage:GetDescendants()) do
-		if v:IsA("RemoteEvent") then
-			local nome = string.lower(v.Name)
-			for _, kw in ipairs(CONFIG.RemoteKeywords) do
-				if string.find(nome, string.lower(kw)) then
-					table.insert(candidatos, v)
-					break
-				end
-			end
-		end
-	end
-
-	if #candidatos > 0 then
-		-- pega o mais curto (geralmente o "HitEvent" principal)
-		table.sort(candidatos, function(a, b) return #a.Name < #b.Name end)
-		RemoteEventCache = candidatos[1]
-		return RemoteEventCache
-	end
-	return nil
-end
-
-local function equipar(root, hum, ferramenta)
-	if not ferramenta or not hum or hum.Health <= 0 then return end
-	if ferramenta.Parent ~= hum then
-		pcall(function() hum:EquipTool(ferramenta) end)
-	end
-end
-
--- Ataque via VirtualInputManager (simula clique esquerdo)
-local function cliqueVirtual()
-	if not CONFIG.UsarVirtualMouse then return end
-	pcall(function()
-		local pos = UIS:GetMouseLocation() -- fallback se não houver mouse
-		VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
-		task.wait(0.05)
-		VIM:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
-	end)
-end
-
--- Dispara todos os métodos de ataque num alvo
-local function atacar(alvo, parte, root, hum, ferramenta)
-	-- 1) RemoteEvent (principal — servidor não precisa do clique)
-	if CONFIG.UsarRemoteEvent then
-		local re = acharRemoteEvent()
-		if re then
-			local args = CONFIG.RemoteArgs(ferramenta, parte, alvo)
-			-- args pode ser valor único ou tabela
-			if type(args) == "table" and #args > 0 then
-				pcall(function() re:FireServer(table.unpack(args)) end)
+			if objeto:IsA("BasePart") then
+				parte = objeto -- se a própria Pumpkin já for uma Part
 			else
-				pcall(function() re:FireServer(args) end)
+				parte = objeto:FindFirstChildWhichIsA("BasePart", true) -- se for um Model, pega a Part dentro dele
 			end
-		end
-	end
 
-	-- 2) ClickDetector
-	if CONFIG.UsarClickDetector then
-		local cd = alvo:FindFirstChildWhichIsA("ClickDetector", true) or (parte and parte:FindFirstChildWhichIsA("ClickDetector"))
-		if cd and fireclickdetector then
-			-- fireclickdetector(clickDetector, distance, mouseButton)
-			pcall(fireclickdetector, cd, CONFIG.RangeAtaque, Enum.MouseButton1)
-		end
-	end
+			if parte then
+				local distancia = (parte.Position - hrp.Position).Magnitude -- calcula a distância até mim
 
-	-- 3) ProximityPrompt
-	if CONFIG.UsarProximityPrompt then
-		local prompt = alvo:FindFirstChildWhichIsA("ProximityPrompt", true)
-		if prompt and fireproximityprompt then
-			pcall(fireproximityprompt, prompt, CONFIG.RangeAtaque, 0)
-		end
-	end
-
-	-- 4) VirtualInputManager (M1 físico simulado)
-	cliqueVirtual()
-
-	-- 5) Tool Activate (fallback vanilla)
-	if CONFIG.UsarToolActivate and ferramenta then
-		pcall(function() ferramenta:Activate() end)
-	end
-end
-
-local function teleportAte(parte, root)
-	local destino = parte.CFrame + Vector3.new(0, 3, 0)
-	local dist = (destino.Position - root.Position).Magnitude
-	local tempo = math.max(dist / CONFIG.VelocidadeTP, 0.05)
-
-	local tween = TweenService:Create(root, TweenInfo.new(tempo, Enum.EasingStyle.Linear), {
-		CFrame = destino
-	})
-	tween:Play()
-	tween.Completed:Wait()
-	task.wait(0.05)
-end
-
--- ========= TOGGLE =========
-UIS.InputBegan:Connect(function(input, processado)
-	if processado then return end
-	if input.KeyCode == CONFIG.TeuclaToggle then
-		Rodando = not Rodando
-		print("Farm Pumpkin:", Rodando)
-	end
-end)
-
--- ========= LOOP PRINCIPAL =========
-task.spawn(function()
-	while true do
-		task.wait()
-
-		if Rodando then
-			local char, root, hum, ferramenta = getChar()
-			if root and hum and hum.Health > 0 then
-				equipar(root, hum, ferramenta)
-
-				-- VARRE O MAPA TODO
-				for _, obj in ipairs(workspace:GetDescendants()) do
-					if not Rodando then break end
-					if obj.Name == CONFIG.NomeAlvo then
-						local parte = parteDaAbobora(obj)
-						if parte and parte.Parent then
-
-							-- 2. TELEPORTA ATÉ ELA
-							teleportAte(parte, root)
-
-							-- 3. ATACA ATÉ QUEBRAR / SUMIR
-							while obj.Parent and parte.Parent and Rodando do
-								-- olha para a abóbora
-								pcall(function()
-									root.CFrame = CFrame.lookAt(root.Position, Vector3.new(parte.Position.X, root.Position.Y, parte.Position.Z))
-								end)
-
-								local dist = (parte.Position - root.Position).Magnitude
-								if dist <= CONFIG.RangeAtaque then
-									atacar(obj, parte, root, hum, ferramenta)
-								end
-
-								task.wait(CONFIG.Cooldown)
-							end
-						end
-					end
+				if distancia < menorDistancia then
+					menorDistancia = distancia
+					melhor = parte -- essa é a mais próxima até agora
 				end
 			end
 		end
 	end
+
+	return melhor
+end
+
+--=====================================================
+-- FUNÇÃO 3: Atacar
+-- No seu jogo da foto é o "Ataque Rápido [Z]", então ele aperta Z
+--=====================================================
+local function Atacar()
+	-- Aperta o Z
+	VirtualInputManager:SendKeyEvent(Enum.KeyCode.Z, true, game, 1)
+	task.wait(0.05)
+	-- Solta o Z
+	VirtualInputManager:SendKeyEvent(Enum.KeyCode.Z, false, game, 1)
+
+	-- Se você tiver uma ferramenta na mão, descomente a linha abaixo:
+	-- local ferramenta = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+	-- if ferramenta then ferramenta:Activate() end
+end
+
+--=====================================================
+-- FUNÇÃO 4: Loop principal (andar até perto + atacar)
+--=====================================================
+local function LoopPrincipal()
+	if Executando then return end
+	Executando = true
+
+	while Ativo do
+		local personagem, humanoid, hrp = PegarPersonagem()
+
+		-- SE EU MORRER OU SEM PERSONAGEM = PARA O SCRIPT
+		if not humanoid or humanoid.Health <= 0 or not hrp then
+			warn("[Pumpkin] Você morreu/sem personagem. Script parado.")
+			Ativo = false
+			break
+		end
+
+		local alvo = EncontrarPumpkinMaisProxima()
+
+		-- SE NÃO ENCONTRAR A PUMPKIN = PARA O SCRIPT
+		if not alvo or not alvo.Parent then
+			warn("[Pumpkin] Nenhuma Pumpkin encontrada. Script parado.")
+			Ativo = false
+			break
+		end
+
+		local distanciaAtual = (alvo.Position - hrp.Position).Magnitude
+
+		if distanciaAtual > Distancia then
+			-- AINDA ESTOU LONGE: ANDAR DE FORMA SUAVE ATÉ FICAR A [Distancia] STUDS
+			-- MoveTo faz o personagem andar normalmente (suave, não teleporta)
+			local direcao = (alvo.Position - hrp.Position)
+			if direcao.Magnitude > 0 then
+				direcao = direcao.Unit
+			end
+
+			local destino = alvo.Position - (direcao * Distancia) -- ponto que fica exatamente a Distancia studs dela
+
+			humanoid:MoveTo(Vector3.new(destino.X, hrp.Position.Y, destino.Z))
+		else
+			-- JÁ ESTOU PERTO: OLHAR PARA ELA E ATACAR EM LOOP
+			hrp.CFrame = CFrame.new(hrp.Position, Vector3.new(alvo.Position.X, hrp.Position.Y, alvo.Position.Z))
+			Atacar()
+		end
+
+		task.wait(Delay) -- espera o tempo do Delay antes de repetir
+	end
+
+	-- Parar de andar quando desligar/morrer
+	local _, humanoid, hrp = PegarPersonagem()
+	if humanoid and hrp and humanoid.Health > 0 then
+		humanoid:MoveTo(hrp.Position)
+	end
+
+	Executando = false
+	print("[Pumpkin] Script desligado.")
+end
+
+--=====================================================
+-- TECLA PARA LIGAR/DESLIGAR
+--=====================================================
+UserInputService.InputBegan:Connect(function(input, processado)
+	if processado then return end -- ignora se já foi processado pelo jogo
+
+	if input.KeyCode == Tecla then
+		Ativo = not Ativo -- inverte: false vira true, true vira false
+
+		if Ativo then
+			print("[Pumpkin] Ligado! Indo até a Pumpkin mais próxima...")
+			task.spawn(LoopPrincipal) -- começa o loop em outra thread, sem travar o jogo
+		else
+			print("[Pumpkin] Desligado.")
+		end
+	end
 end)
+
+print("[Pumpkin] Script carregado! Aperte " .. tostring(Tecla) .. " para ligar/desligar")
+Como funciona cada parte

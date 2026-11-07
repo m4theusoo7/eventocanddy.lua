@@ -1,4 +1,105 @@
---[[
+-- =============================================================================
+-- SCRIPT: AUTO FARM BLOX FRUITS (LEVE & OTIMIZADO)
+-- =============================================================================
+
+-- Variável de controle para ativar/desativar o farm
+local _G.AutoFarm = true
+
+-- Serviços essenciais do Roblox
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local VirtualUser = game:GetService("VirtualUser")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Evita desconexão por inatividade (Anti-AFK)
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new(0,0))
+end)
+
+-- FUNÇÃO: Encontrar o NPC vivo mais próximo do jogador
+local function obterNpcMaisProximo()
+    local menorDistancia = math.huge
+    local npcAlvo = nil
+    
+    local character = LocalPlayer.Character
+    if not character or not character:FindFirstChild("HumanoidRootPart") then 
+        return nil 
+    end
+    
+    local posicaoJogador = character.HumanoidRootPart.Position
+
+    -- No Blox Fruits, os NPCs ficam localizados na pasta Enemies (ou diretamente no Workspace dependendo do Sea)
+    local pastaInimigos = Workspace:FindFirstChild("Enemies") or Workspace
+
+    for _, npc in pairs(pastaInimigos:GetChildren()) do
+        -- Verifica se é um NPC válido, se está vivo e possui corpo físico
+        if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc:FindFirstChild("HumanoidRootPart") then
+            if npc.Humanoid.Health > 0 then
+                local distancia = (npc.HumanoidRootPart.Position - posicaoJogador).Magnitude
+                -- Seleciona apenas o que estiver mais perto
+                if distancia < menorDistancia then
+                    menorDistancia = distancia
+                    npcAlvo = npc
+                end
+            end
+        end
+    end
+    return npcAlvo
+end
+
+-- FUNÇÃO: Equipar a ferramenta de combate automática (Soco/Espada)
+local function equiparArma()
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    -- Verifica se já não tem algo equipado
+    if not character:FindFirstChildOfClass("Tool") then
+        local mochila = LocalPlayer:FindFirstChildOfClass("Backpack")
+        if mochila then
+            -- Procura por "Combat", "Dark Blade", ou qualquer ferramenta disponível na mochila
+            for _, item in pairs(mochila:GetChildren()) do
+                if item:IsA("Tool") then
+                    item.Parent = character -- Equipa o item
+                    break
+                end
+            end
+        end
+    end
+end
+
+-- LOOP PRINCIPAL DO AUTO FARM
+task.spawn(function()
+    while _G.AutoFarm do
+        -- Intervalo padrão de segurança para não travar a CPU ou dar crash no executor
+        task.wait(0.1) 
+        
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("HumanoidRootPart") and character:FindFirstChild("Humanoid").Health > 0 then
+            
+            local alvo = obterNpcMaisProximo()
+            
+            if alvo then
+                -- 1. Garante que a ferramenta está na mão para atacar
+                equiparArma()
+                
+                -- 2. Teleporta/Move o personagem para trás ou acima do NPC (evita tomar dano excessivo)
+                -- Modifica o CFrame para ficar a 4 studs de distância do alvo
+                character.HumanoidRootPart.CFrame = alvo.HumanoidRootPart.CFrame * CFrame.new(0, 4, 2)
+                
+                -- 3. Executa o ataque básico simulando o clique do mouse
+                VirtualUser:CaptureController()
+                VirtualUser:Button1Down(Vector2.new(0,0))
+                
+                -- Desativa a colisão entre o jogador e o NPC para evitar bugs de empurrão
+                if alvo:FindFirstChild("HumanoidRootPart") then
+                    alvo.HumanoidRootPart.CanCollide = false
+                end
+            end
+        end
+    end
+end)--[[
     Script de Auto Farm - Blox Fruits
     Compatível com: Delta, Fluxus, Hydrogen, Arceus X
 --]]

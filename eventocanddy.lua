@@ -1,102 +1,93 @@
-task.spawn(function()
-    -- CONFIGURAÇÕES ADAPTADAS PARA O SEA 1
-    local NOME_ABOBORA = "Pumpkin" 
-    local VELOCIDADE_VOAR = 75     
+local PUMPKIN_NAME = "Pumpkin"
+local FLY_SPEED = 75
 
-    local Players = game:GetService("Players")
-    local TweenService = game:GetService("TweenService")
-    local localPlayer = Players.LocalPlayer
-    local farmAtivo = false
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local localPlayer = Players.LocalPlayer
+local farmActive = false
 
-    -- 1. FUNÇÃO PARA GARANTIR QUE A ARMA ESTÁ NA MÃO
-    local function equiparArma()
-        local character = localPlayer.Character
-        if not character then return nil end
-        
-        local ferramentaAtual = character:FindFirstChildWhichIsA("Tool")
-        if ferramentaAtual then return ferramentaAtual end
-        
-        local mochila = localPlayer:FindFirstChild("Backpack")
-        if mochila then
-            local ferramenta = mochila:FindFirstChildWhichIsA("Tool")
-            if ferramenta then
-                ferramenta.Parent = character
-                return ferramenta
-            end
-        end
-        return nil
-    end
-
-    -- 2. FUNÇÃO DE MOVIMENTO (TWEEN)
-    local function moverPara(destinoCFrame)
-        local character = localPlayer.Character
-        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-        if not rootPart then return end
-        
-        local distancia = (rootPart.Position - destinoCFrame.Position).Magnitude
-        local tempo = distancia / VELOCIDADE_VOAR
-        
-        local tweenInfo = TweenInfo.new(tempo, Enum.EasingStyle.Linear)
-        local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = destinoCFrame})
-        
-        tween:Play()
-        tween.Completed:Wait()
-    end
-
-    -- 3. FUNÇÃO DE ATAQUE REFORMULADA
-    local function atacar()
-        local arma = equiparArma()
-        if arma then
-            arma:Activate()
+local function equipWeapon()
+    local character = localPlayer.Character
+    if not character then return nil end
+    
+    local currentTool = character:FindFirstChildWhichIsA("Tool")
+    if currentTool then return currentTool end
+    
+    local backpack = localPlayer:FindFirstChild("Backpack")
+    if backpack then
+        local tool = backpack:FindFirstChildWhichIsA("Tool")
+        if tool then
+            tool.Parent = character
+            return tool
         end
     end
+    return nil
+end
 
-    -- 4. LOOP PRINCIPAL DO FARM DO EVENTO
-    local function iniciarFarm()
-        farmAtivo = true
-        print("Auto-Farm de Abóboras (Protegido) ATIVADO!")
+local function moveToCFrame(targetCFrame)
+    local character = localPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+    
+    local distance = (rootPart.Position - targetCFrame.Position).Magnitude
+    local duration = distance / FLY_SPEED
+    
+    local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = targetCFrame})
+    
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+local function attackTarget()
+    local weapon = equipWeapon()
+    if weapon then
+        weapon:Activate()
+    end
+end
+
+local function startFarmLoop()
+    farmActive = true
+    print("Farm Started")
+    
+    while farmActive do
+        local foundItem = false
         
-        while farmAtivo do
-            local aboboraAchada = false
+        for _, object in pairs(workspace:GetDescendants()) do
+            if not farmActive then break end
             
-            for _, objeto in pairs(workspace:GetDescendants()) do
-                if not farmAtivo then break end
+            if string.find(object.Name:lower(), "pumpkin") or string.find(object.Name:lower(), "candy") then
+                local targetPart = object:IsA("BasePart") and object or object:FindFirstChildWhichIsA("BasePart")
                 
-                -- Procura o item no mapa
-                if string.find(objeto.Name:lower(), "pumpkin") or string.find(objeto.Name:lower(), "candy") then
-                    local parteAlvo = objeto:IsA("BasePart") and objeto or objeto:FindFirstChildWhichIsA("BasePart")
+                if targetPart and targetPart.Parent then
+                    foundItem = true
                     
-                    if parteAlvo and parteAlvo.Parent then
-                        aboboraAchada = true
-                        
-                        -- Loop de ataque na abóbora atual
-                        while farmAtivo and parteAlvo and parteAlvo:IsDescendantOf(workspace) do
-                            moverPara(parteAlvo.CFrame * CFrame.new(0, 0.5, 0)) 
-                            atacar()
-                            task.wait(0.1)
-                        end
+                    while farmActive and targetPart and targetPart:IsDescendantOf(workspace) do
+                        moveToCFrame(targetPart.CFrame * CFrame.new(0, 0.5, 0))
+                        attackTarget()
+                        task.wait(0.1)
                     end
                 end
             end
-            
-            if not aboboraAchada then
-                task.wait(3)
-            end
+        end
+        
+        if not foundItem then
+            task.wait(3)
         end
     end
+end
 
-    -- CONTROLE NO CHAT
-    localPlayer.Chatted:Connect(function(mensagem)
-        if mensagem:lower() == "!farm" then
-            if not farmAtivo then 
-                task.spawn(iniciarFarm) 
-            else 
-                farmAtivo = false 
-                print("Auto-Farm DESATIVADO!")
-            end
-        elseif mensagem:lower() == "!stop" then
-            farmAtivo = false
-            print("Auto-Farm PARADO!")
+localPlayer.Chatted:Connect(function(message)
+    local cmd = message:lower()
+    if cmd == "!farm" then
+        if not farmActive then
+            task.spawn(startFarmLoop)
+        else
+            farmActive = false
+            print("Farm Disabled")
         end
-    end)
+    elseif cmd == "!stop" then
+        farmActive = false
+        print("Farm Stopped")
+    end
 end)

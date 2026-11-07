@@ -1,101 +1,94 @@
--- ====================================================================
--- CONFIGURAÇÕES PRINCIPAIS (Altere aqui)
--- ====================================================================
-local DISTANCIA_ALVO = 5       -- <--- ONDE MUDA A DISTÂNCIA (Mude o 5 para o valor que quiser)
-local DELAY_ATAQUE    = 0.2     -- Tempo entre os socos (Blox fruits aceita ataques rápidos)
-local TECLA_ATIVAR    = "h"     -- Tecla para ligar e desligar
--- ====================================================================
+--[[
+    Script de Auto Farm - Blox Fruits
+    Compatível com: Delta, Fluxus, Hydrogen, Arceus X
+--]]
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local RunService = game:GetService("RunService")
+
 local LocalPlayer = Players.LocalPlayer
-local scriptAtivo = false
 
--- Função para achar a abóbora mais próxima no mapa
-local function obterAboboraMaisProxima()
-    local character = LocalPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+-- Configurações básicas do Auto Farm
+local AutoFarmAtivo = true
+local DistanciaMaxima = 350 -- Raio de busca por inimigos
+
+-- Função para equipar automaticamente uma arma (Espada ou Estilo de Luta/Melee)
+local function equiparArma()
+    local personagem = LocalPlayer.Character
+    if not personagem then return end
     
-    local meuHRP = character.HumanoidRootPart
-    local alvoMaisProximo = nil
-    local menorDistancia = math.huge
-
-    -- Procura no Workspace por partes chamadas Pumpkin
-    for _, objeto in ipairs(Workspace:GetDescendants()) do
-        if objeto.Name == "Pumpkin" and objeto:IsA("BasePart") then
-            local distancia = (objeto.Position - meuHRP.Position).Magnitude
-            if distancia < menorDistancia then
-                menorDistancia = distancia
-                alvoMaisProximo = objeto
+    -- Procura na mochila por ferramentas do tipo Melee ou Sword
+    for _, ferramenta in ipairs(LocalPlayer.Backpack:GetChildren()) do
+        if ferramenta:IsA("Tool") then
+            local tooltip = ferramenta.ToolTip or ""
+            if tooltip == "Melee" or tooltip == "Sword" or tooltip:find("Blox Fruit") == nil then
+                personagem.Humanoid:EquipTool(ferramenta)
+                break
             end
         end
     end
-    return alvoMaisProximo
 end
 
--- Loop funcional que roda no executor
-task.spawn(function()
-    while true do
-        task.wait(0.1) -- Evita travar o seu Roblox
-        
-        if scriptAtivo then
-            local character = LocalPlayer.Character
-            local hrp = character and character:FindFirstChild("HumanoidRootPart")
-            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+-- Função para localizar o NPC/Inimigo mais próximo na pasta padrão do Blox Fruits (Workspace.Enemies)
+local function obterInimigoMaisProximo()
+    local personagem = LocalPlayer.Character
+    if not personagem or not personagem:FindFirstChild("HumanoidRootPart") then return nil end
+    
+    local raizJogador = personagem.HumanoidRootPart
+    local inimigoMaisProximo = nil
+    local menorDistancia = DistanciaMaxima
+    
+    local pastaInimigos = Workspace:FindFirstChild("Enemies")
+    if pastaInimigos then
+        for _, inimigo in ipairs(pastaInimigos:GetChildren()) do
+            local raizInimigo = inimigo:FindFirstChild("HumanoidRootPart")
+            local humanoideInimigo = inimigo:FindFirstChild("Humanoid")
             
-            -- Se você morrer, o script desliga automaticamente para não dar erro
-            if not humanoid or humanoid.Health <= 0 or not hrp then
-                scriptAtivo = false
-                print("Script desligado: Você morreu ou resetou.")
-                continue
-            end
-
-            local abobora = obterAboboraMaisProxima()
-            
-            if abobora and abobora.Parent then
-                -- Calcula a posição exata para ficar a 5 studs (ou a distância que você escolheu)
-                local direcao = (hrp.Position - abobora.Position).Unit
-                local posicaoFinal = abobora.Position + (direcao * DISTANCIA_ALVO)
-                
-                -- Se a abóbora existir e você estiver longe, ele altera a sua posição suavemente frame por frame
-                if (hrp.Position - abobora.Position).Magnitude > (DISTANCIA_ALVO + 1) then
-                    hrp.CFrame = CFrame.new(posicaoFinal)
-                    task.wait(0.05) -- Pequena pausa para o anti-cheat não te derrubar
-                else
-                    -- Chegou perto? Começa o loop de ataque real do Blox Fruits
-                    while scriptAtivo and abobora and abobora.Parent and (humanoid.Health > 0) do
-                        
-                        -- Sistema de soco nativo do Blox Fruits (Dispara o evento de combate do jogo)
-                        local combatFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Modules") and game:GetService("ReplicatedStorage").Modules:FindFirstChild("Net")
-                        if combatFolder then
-                            -- Executa o clique de ataque que o jogo reconhece
-                            game:GetService("VirtualUser"):CaptureController()
-                            game:GetService("VirtualUser"):ClickButton1(Vector2.new(850, 520))
-                        end
-                        
-                        task.wait(DELAY_ATAQUE)
-                        
-                        -- Verifica se o objeto ainda tá longe por algum motivo e reajusta
-                        if (hrp.Position - abobora.Position).Magnitude > (DISTANCIA_ALVO + 2) then
-                            break
-                        end
-                    end
+            -- Verifica se o inimigo está vivo e possui parte física válida
+            if raizInimigo and humanoideInimigo and humanoideInimigo.Health > 0 then
+                local distancia = (raizJogador.Position - raizInimigo.Position).Magnitude
+                if distancia < menorDistancia then
+                    menorDistancia = distancia
+                    inimigoMaisProximo = inimigo
                 end
-            else
-                -- Se destruir a abóbora e não tiver outra perto, ele desliga para você não voar no limbo
-                scriptAtivo = false
-                print("Nenhuma abóbora por perto. Script pausado.")
             end
         end
     end
-end)
+    
+    return inimigoMaisProximo
+end
 
--- Ativador por tecla
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode[TECLA_ATIVAR:upper()] then
-        scriptAtivo = not scriptAtivo
-        print("Script executado com sucesso! Estado atual:", scriptAtivo)
+-- Função para realizar o ataque e movimentação até o alvo
+local function atacarAlvo(alvo)
+    if not alvo or not alvo:FindFirstChild("HumanoidRootPart") then return end
+    
+    local personagem = LocalPlayer.Character
+    if not personagem or not personagem:FindFirstChild("HumanoidRootPart") then return end
+    
+    -- Teleporta levemente acima/perto do NPC para focar o farm
+    personagem.HumanoidRootPart.CFrame = alvo.HumanoidRootPart.CFrame * CFrame.new(0, 5, 3)
+    
+    -- Garante que a arma está em mãos
+    equiparArma()
+    
+    -- Simula o clique do mouse para desferir o ataque básico (soco ou golpe da arma)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+    task.wait(0.05)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+end
+
+-- Loop contínuo de execução do Auto Farm com espaçamento para evitar travamento do jogo
+task.spawn(function()
+    while AutoFarmAtivo do
+        pcall(function()
+            local alvoAtual = obterInimigoMaisProximo()
+            if alvoAtual then
+                atacarAlvo(alvoAtual)
+            end
+        end)
+        -- Intervalo em segundos para garantir estabilidade e leveza no executor
+        task.wait(0.25)
     end
 end)

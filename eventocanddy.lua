@@ -1,150 +1,131 @@
-local Players = game.Players
-local Player = Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
-
--- Configurações
-local ItemName = "Pumpkin" -- Nome do item (mude se for outro, ex: "Model", "Enemy")
-local Speed = 20           -- Velocidade de movimento
-local AttackDelay = 0.5    -- Tempo entre ataques
-
--- Tabela de Coordenadas das Ilhas (Ajuste conforme necessário)
-local Islands = {
-    [1] = Vector3.new(246, -79, 58),   -- Marine Base
-    [2] = Vector3.new(-100, -100, 100),-- Sea Beast Island (Exemplo genérico)
-    [3] = Vector3.new(400, 0, 50),     -- Ilha do Dragão (Exemplo genérico)
-}
-
-local CurrentIslandIndex = 1
-
--- Função para Teleporte Suave (Padrão Delta)
-function MoveTo(target, speed)
-    if not target then return end
-    
-    local rootPart = HumanoidRootPart or Character:FindFirstChild("HumanoidRootPart")
-    
-    -- Cria um modelo temporário para o movimento suave
-    local TargetClone = Instance.new("Model")
-    TargetClone.Name = "TeleportTarget"
-    TargetClone.Parent = workspace
-    
-    local Part = Instance.new("Part")
-    Part.Size = Vector3.new(1, 1, 1)
-    Part.Anchored = true
-    Part.CanCollide = false
-    Part.Transparency = 0.5
-    Part.Color = Color3.fromRGB(255, 255, 255) 
-    
-    local Handle = Instance.new("BodyVelocity")
-    Handle.Velocity = Vector3.zero
-    
-    Part.Parent = TargetClone
-    Handle.Parent = Part
-    
-    -- Posiciona o alvo perto do jogador inicialmente se estiver longe
-    if not rootPart:FindFirstChildWhichIsA("Model", ItemName) then
-        local pos = target.Position + (rootPart.Position - target.Position).Unit * 5
-        Part.Position = pos
-    else
-        Part.Position = target.Position
+pcall(function()
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
     end
-    
-    -- Configura a velocidade para ir até o alvo
-    Handle.Velocity = (target.Position - rootPart.Position) * speed
-    
-    task.wait(1.5) -- Tempo de voo suave
-    
-    -- Limpa o clone após chegar
-    TargetClone:Destroy()
-end
 
--- Função para Atacar
-function Attack(target)
-    if not target then return end
-    
-    local Weapon = Character:FindFirstChild("RightHand") or Character:FindFirstChild("LeftHand")
-    
-    if not Weapon then
-        -- Se não tiver arma, usa o corpo (ataque básico)
-        local BodyThrust = Instance.new("BodyThrust")
-        BodyThrust.Name = "AttackForce"
-        BodyThrust.Parent = HumanoidRootPart
-        
-        local AttackVector = (target.Position - HumanoidRootPart.Position).Unit * 5
-        BodyThrust.Velocity = AttackVector
-        
-        task.wait(0.2) -- Tempo de ataque
-        BodyThrust:Destroy()
-    else
-        -- Se tiver arma, usa a função padrão do Delta ou Raycast simples
-        local WeaponPos = Weapon.CFrame.Position
-        local TargetPos = target.Position
-        
-        local VectorToTarget = (TargetPos - WeaponPos).Unit * 5
-        local BodyThrust = Instance.new("BodyThrust")
-        BodyThrust.Name = "AttackForce"
-        BodyThrust.Parent = Weapon
-        
-        BodyThrust.Velocity = VectorToTarget
-        
-        task.wait(0.2) -- Tempo de ataque
-        BodyThrust:Destroy()
+    local Players = game.Players
+    local Player = Players.LocalPlayer
+    local TweenService = game:GetService("TweenService")
+    local VirtualUser = game:GetService("VirtualUser")
+
+    local ItemName = "Pumpkin"
+    local Speed = 350
+    local AttackDelay = 0.4
+
+    local Islands = {
+        [1] = Vector3.new(246, 15, 58),
+        [2] = Vector3.new(-6500, 100, -4500),
+        [3] = Vector3.new(1000, 20, 1500),
+    }
+
+    local CurrentIslandIndex = 1
+
+    local function GetTargetPosition(target)
+        if typeof(target) == "Vector3" then
+            return target
+        elseif target:IsA("BasePart") then
+            return target.Position
+        elseif target:IsA("Model") then
+            local success, pivot = pcall(function() return target:GetPivot().Position end)
+            if success then return pivot end
+            if target.PrimaryPart then return target.PrimaryPart.Position end
+        end
+        return nil
     end
-end
 
--- Função Principal do Loop
-while true do
-    local Item = workspace:FindFirstChild(ItemName) or workspace:FindFirstChildWhichIsA("Model", ItemName)
-    
-    if not Item then
-        print("Item não encontrado. Trocando de ilha...")
-        
-        -- Tenta achar em outras ilhas ou teletransporta para uma nova coordenada
-        local NewPos = Islands[(CurrentIslandIndex % #Islands) + 1]
-        
-        MoveTo(NewPos, Speed * 2) -- Teleporte rápido para a próxima ilha
-        
-        task.wait(3) -- Espera chegar na nova ilha
-        CurrentIslandIndex = (CurrentIslandIndex % #Islands) + 1
-        
-    else
-        print("Item encontrado! Movendo...")
-        
-        -- Move até o item suavemente
-        MoveTo(Item, Speed)
-        
-        task.wait(0.5) -- Pequena pausa para alinhar
-        
-        -- Ataca até quebrar
-        while Item and Item.Parent ~= workspace do
-            Attack(Item)
-            
-            -- Verifica se o item ainda existe (se foi coletado ou destruído)
-            if not workspace:FindFirstChild(ItemName) then
+    local function TweenTo(targetPos)
+        if not targetPos then return end
+        local Character = Player.Character
+        if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+        local rootPart = Character.HumanoidRootPart
+
+        local distance = (rootPart.Position - targetPos).Magnitude
+        local timeTaken = distance / Speed
+
+        local tweenInfo = TweenInfo.new(timeTaken, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = false end
+        end
+
+        local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = CFrame.new(targetPos + Vector3.new(0, 15, 0))})
+        tween:Play()
+
+        local finished = false
+        local connection
+        connection = tween.Completed:Connect(function()
+            finished = true
+            if connection then connection:Disconnect() end
+        end)
+
+        while not finished do
+            task.wait()
+            if not Player.Character or not Player.Character:FindFirstChild("HumanoidRootPart") then
+                tween:Cancel()
                 break
             end
-            
-            task.wait(AttackDelay)
         end
-        
-        print("Item coletado!")
-        
-        -- Se não houver mais nenhum na área, troca de ilha
-        local ItemCount = 0
-        for _, child in ipairs(workspace:GetDescendants()) do
-            if child.Name == ItemName then
-                ItemCount = ItemCount + 1
-            end
-        end
-        
-        if ItemCount <= 0 then
-            print("Sem mais itens na área. Trocando de ilha...")
-            MoveTo(Islands[CurrentIslandIndex], Speed * 2)
-            task.wait(3)
-            CurrentIslandIndex = (CurrentIslandIndex % #Islands) + 1
+
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then part.CanCollide = true end
         end
     end
-    
-    -- Loop principal com um pequeno delay para não travar o jogo
-    task.wait(0.5)
-end
+
+    local function Attack()
+        pcall(function()
+            VirtualUser:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            task.wait(0.1)
+            VirtualUser:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+        end)
+    end
+
+    local function FindItem()
+        for _, descendant in ipairs(workspace:GetDescendants()) do
+            if descendant.Name == ItemName then
+                if descendant:IsA("Model") or descendant:IsA("BasePart") then
+                    return descendant
+                end
+            end
+        end
+        return nil
+    end
+
+    print("Script do Blox Fruits iniciado com sucesso no Delta!")
+
+    while true do
+        local Character = Player.Character or Player.CharacterAdded:Wait()
+        local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+        local item = FindItem()
+
+        if not item then
+            print("Item não encontrado. A viajar para a ilha " .. CurrentIslandIndex)
+            local targetIsland = Islands[CurrentIslandIndex]
+            TweenTo(targetIsland)
+            CurrentIslandIndex = (CurrentIslandIndex % #Islands) + 1
+            task.wait(3)
+        else
+            print("Item encontrado! A ir ter com ele...")
+            local itemPos = GetTargetPosition(item)
+            
+            if itemPos then
+                TweenTo(itemPos)
+                task.wait(0.5)
+
+                while item and item.Parent ~= nil do
+                    local currentPos = GetTargetPosition(item)
+                    if currentPos and Character:FindFirstChild("HumanoidRootPart") then
+                        Character.HumanoidRootPart.CFrame = CFrame.new(currentPos + Vector3.new(0, 5, 0))
+                    end
+                    
+                    Attack()
+                    
+                    if not item.Parent then break end
+                    task.wait(AttackDelay)
+                end
+                print("Item recolhido/destruído com sucesso!")
+            end
+        end
+        task.wait(0.5)
+    end
+end)

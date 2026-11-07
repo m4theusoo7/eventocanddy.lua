@@ -1,29 +1,29 @@
--- CONFIGURAÇÕES ADAPTADAS PARA O SEA 1
+-- CONFIGURAÇÕES ADAPTADAS PARA O SEA 1 (Sem VirtualUser)
 local NOME_ABOBORA = "Pumpkin" 
-local VELOCIDADE_VOAR = 75     -- Um pouco mais rápido para navegar entre as ilhas do Sea 1
+local VELOCIDADE_VOAR = 75     
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local VirtualUser = game:GetService("VirtualUser")
 local localPlayer = Players.LocalPlayer
 local farmAtivo = false
 
 -- 1. FUNÇÃO PARA GARANTIR QUE A ARMA ESTÁ NA MÃO
 local function equiparArma()
 	local character = localPlayer.Character
-	if not character then return end
+	if not character then return nil end
 	
-	-- Se já tiver algo na mão, não faz nada
-	if character:FindFirstChildWhichIsA("Tool") then return end
+	local ferramentaAtual = character:FindFirstChildWhichIsA("Tool")
+	if ferramentaAtual then return ferramentaAtual end
 	
-	-- Procura a primeira arma/estilo de luta no seu inventário (Backpack) e equipa
 	local mochila = localPlayer:FindFirstChild("Backpack")
 	if mochila then
 		local ferramenta = mochila:FindFirstChildWhichIsA("Tool")
 		if ferramenta then
 			ferramenta.Parent = character
+			return ferramenta
 		end
 	end
+	return nil
 end
 
 -- 2. FUNÇÃO DE MOVIMENTO (TWEEN)
@@ -42,16 +42,19 @@ local function moverPara(destinoCFrame)
 	tween.Completed:Wait()
 end
 
--- 3. FUNÇÃO QUE EXECUTA O CLIQUE M1
+-- 3. FUNÇÃO DE ATAQUE REFORMULADA (Segura e compatível com executores)
 local function atacar()
-	VirtualUser:CaptureController()
-	VirtualUser:ClickButton1(Vector2.new(50, 50)) 
+	local arma = equiparArma()
+	if arma then
+		-- Força a ativação da ferramenta equipada (simula o clique M1 nativamente)
+		arma:Activate()
+	end
 end
 
 -- 4. LOOP PRINCIPAL DO FARM DO EVENTO
 local function iniciarFarm()
 	farmAtivo = true
-	print("Auto-Farm de Abóboras (Sea 1) ATIVADO!")
+	print("Auto-Farm de Abóboras (Sem Erros) ATIVADO!")
 	
 	while farmAtivo do
 		local aboboraAchada = false
@@ -68,19 +71,16 @@ local function iniciarFarm()
 					
 					-- Loop de ataque na abóbora atual
 					while farmAtivo and parteAlvo and parteAlvo:IsDescendantOf(workspace) do
-						equiparArma() -- Garante o soco/espada na mão
-						
-						-- Teleporta exatamente em cima/colado para o soco Combat alcançar
+						-- Teleporta exatamente colado para o soco Combat alcançar
 						moverPara(parteAlvo.CFrame * CFrame.new(0, 0.5, 0)) 
 						
 						atacar()
-						task.wait(0.08) -- Cliques rápidos
+						task.wait(0.1) -- Intervalo entre os socos
 					end
 				end
 			end
 		end
 		
-		-- Se não achar abóboras nas ilhas próximas, espera o servidor carregar novas
 		if not aboboraAchada then
 			task.wait(3)
 		end

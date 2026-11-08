@@ -1,5 +1,5 @@
 -- =====================================================================
--- SCRIPT CORRIGIDO: AUTO FARM PUMPKIN (SEA 1 - DANO REAL)
+-- SCRIPT CORRIGIDO: DETECÇÃO FÍSICA SEM DEPENDÊNCIA DE MESH (SEA 1)
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -9,22 +9,21 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
--- Variáveis de Controle
-_G.FarmPumpkinsSea1 = false
-local TeclaToggle = Enum.KeyCode.E
-local VelocidadeVoo = 350
+-- Configurações e Estado do Farm
+_G.FarmTotalAboboras = false
+local TeclaAtivacao = Enum.KeyCode.E
+local VelocidadeVoo = 350 -- Velocidade segura para cruzar o mar no Sea 1
 
--- Localização dos Remotes Oficiais de Validação de Hit do Blox Fruits
-local Net = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
-local AttackRemote = Net and (Net:FindFirstChild("RegisterAttack") or Net:FindFirstChild("CombatClick"))
-local VerifyRemote = Net and (Net:FindFirstChild("VerifyBlank") or Net:FindFirstChild("VerifyDamage"))
+-- Identificação dos canais de ataque e confirmação do jogo
+local RemotesFolder = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
+local AttackEvent = RemotesFolder and (RemotesFolder:FindFirstChild("RegisterAttack") or RemotesFolder:FindFirstChild("CombatClick"))
 
--- Função de Ataque Corrigida (Força o Hitbox Físico e valida no Servidor)
-local function computarDanoReal()
+-- Função de Ataque Físico Puro (Ignora erros de malha)
+local function socarObjeto()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local tool = Character:FindFirstChildWhichIsA("Tool")
     
-    -- Auto-Equip do Estilo de Luta
+    -- Auto-Equip do Melee (Estilo de Luta)
     if not tool then
         local backpack = LocalPlayer:FindFirstChild("Backpack")
         if backpack then
@@ -38,81 +37,80 @@ local function computarDanoReal()
         end
     end
 
-    -- 1. Ativa a ferramenta localmente para abrir o Hitbox
+    -- Força o soco físico local (Gera o hitbox real do braço do personagem)
     if tool then 
         tool:Activate() 
     end
 
-    -- 2. Dispara a assinatura dupla necessária para o servidor aceitar o dano em objetos estáticos
-    pcall(function()
-        if AttackRemote then 
-            AttackRemote:FireServer() 
-        end
-        if VerifyRemote then 
-            -- Passa uma tabela vazia e o soco para validar o hit de colisão
-            VerifyRemote:FireServer(tool, "RightClick") 
-        end
-    end)
+    -- Envia o pacote redundante para o servidor registrar
+    if AttackEvent then
+        pcall(function()
+            AttackEvent:FireServer()
+        end)
+    end
 end
 
--- Função de Movimentação Direta (Igual aos scripts de baú de alto desempenho)
-local function moverAteAbobora(posAlvo)
+-- Sistema de Movimentação por CFrame Direto (Evita travar se a Mesh não carregar)
+local function viajarAteAlvo(cframeDestino)
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local hrp = Character:FindFirstChild("HumanoidRootPart")
     local humanoid = Character:FindFirstChildOfClass("Humanoid")
     if not hrp or not humanoid then return end
 
-    -- Corta a física de queda para não bugar entre as ilhas do Sea 1
+    -- Desativa estados físicos que fazem o boneco tremer ou cair no oceano
     humanoid.PlatformStand = true
     
-    -- Loop de deslocamento direto de CFrame por frame (Substitui o Tween bugado)
-    while _G.FarmPumpkinsSea1 and (hrp.Position - posAlvo.p).Magnitude > 5 do
+    -- Move frame por frame anulando a física nativa do Roblox
+    while _G.FarmTotalAboboras and (hrp.Position - cframeDestino.p).Magnitude > 4 do
         task.wait()
-        local direcao = (posAlvo.p - hrp.Position).Unit
-        hrp.Velocity = Vector3.new(0,0,0) -- Zera a gravidade do Roblox
+        local direcao = (cframeDestino.p - hrp.Position).Unit
+        hrp.Velocity = Vector3.new(0, 0, 0)
         hrp.CFrame = hrp.CFrame + (direcao * (VelocidadeVoo * task.wait()))
     end
     
-    -- Trava exatamente na posição final voltado para o item
-    if _G.FarmPumpkinsSea1 then
-        hrp.CFrame = posAlvo
+    -- Garante posicionamento cravado ao chegar
+    if _G.FarmTotalAboboras then
+        hrp.CFrame = cframeDestino
     end
 end
 
--- Loop de Varredura do Sea 1
+-- Loop de Varredura Absoluta (Procura de uma em uma pelo Sea 1)
 task.spawn(function()
     while true do
         task.wait(0.5)
         
-        if _G.FarmPumpkinsSea1 then
+        if _G.FarmTotalAboboras then
             Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
             local hrp = Character:FindFirstChild("HumanoidRootPart")
             
             if hrp then
-                for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
-                    if not _G.FarmPumpkinsSea1 then break end
+                -- Varre o mapa ignorando modelos quebrados e focando em BaseParts ativas
+                for _, item do map em pairs(game:GetService("Workspace"):GetDescendants()) do
+                    if not _G.FarmTotalAboboras then break end
                     
-                    -- Filtra o modelo exato da abóbora
-                    if obj:IsA("Model") and string.find(string.lower(obj.Name), "pumpkin") then
-                        local partFisica = obj:FindFirstChildWhichIsA("BasePart")
+                    -- Filtra apenas itens físicos que contenham "pumpkin" no nome
+                    if item:IsA("BasePart") and string.find(string.lower(item.Name), "pumpkin") then
+                        -- Ignora se o objeto for apenas uma textura visual quebrada (Mesh/Beam)
+                        if not item:IsA("MeshPart") and item.CanCollide == false and item.Size.Magnitude < 1 then
+                            continue
+                        end
                         
-                        if partFisica and partFisica.Parent then
-                            -- Posição calibrada: 1.5 studs acima e rotacionando a câmera do boneco para baixo encarando o alvo
-                            local localAlvo = partFisica.CFrame * CFrame.new(0, 1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                        -- Ponto de ataque posicionado ligeiramente acima do centro geométrico do bloco
+                        local posicaoSegura = item.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                        
+                        -- Executa a viagem linear estável
+                        viajarAteAlvo(posicaoSegura)
+                        
+                        -- Desfere socos até que o bloco seja coletado/destruído e limpo da memória
+                        while _G.FarmTotalAboboras and item and item.Parent do
+                            task.wait(0.02) -- Cadência do Fast Attack físico
                             
-                            -- Executa a movimentação limpa
-                            moverAteAbobora(localAlvo)
-                            
-                            -- Loop de Fast Attack: Bate até o objeto físico sumir do Workspace
-                            while _G.FarmPumpkinsSea1 and obj and obj.Parent and partFisica and partFisica.Parent do
-                                task.wait(0.02) -- Frequência ideal para o servidor processar a quebra
-                                
-                                if hrp and partFisica then
-                                    hrp.CFrame = partFisica.CFrame * CFrame.new(0, 1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
-                                end
-                                
-                                computarDanoReal()
+                            -- Mantém o CFrame colado contra puxões do anti-cheat ou rebotes
+                            if hrp and item then
+                                hrp.CFrame = item.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                             end
+                            
+                            socarObjeto()
                         end
                     end
                 end
@@ -121,15 +119,15 @@ task.spawn(function()
     end
 end)
 
--- Ativador (Tecla E)
+-- Gerenciador da Tecla E para Ativar/Desativar
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.KeyCode == TeclaToggle then
-        _G.FarmPumpkinsSea1 = not _G.FarmPumpkinsSea1
-        print("[!] STATUS DO FARM:", _G.FarmPumpkinsSea1 and "ATIVADO" or "DESATIVADO")
+    if input.KeyCode == TeclaAtivacao then
+        _G.FarmTotalAboboras = not _G.FarmTotalAboboras
+        print("[!] COORDENADOR DE FARM - Status:", _G.FarmTotalAboboras and "LIGADO" or "DESLIGADO")
         
-        -- Restaura o boneco quando o farm é desligado
-        if not _G.FarmPumpkinsSea1 then
+        -- Devolve os controles físicos do boneco ao desligar
+        if not _G.FarmTotalAboboras then
             Character = LocalPlayer.Character
             local humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
             if humanoid then 

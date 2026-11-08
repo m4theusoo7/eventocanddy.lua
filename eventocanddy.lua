@@ -54,7 +54,7 @@ local function attackPumpkin()
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
 end
 
--- // Encontra o Pumpkin / Candy real ignorando NPCs e diálogos
+-- // Encontra o Pumpkin / Candy real ignorando absolutamente qualquer NPC ou Caldeirão
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -66,11 +66,19 @@ local function getClosestPumpkin()
     for _, obj in ipairs(Workspace:GetDescendants()) do
         local nameLower = string.lower(obj.Name)
         
-        -- Filtra por Pumpkin ou Candy, mas ignora terminantemente NPCs e personagens fixos
+        -- Verifica se é realmente um item coletável do evento
         local isTarget = string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")
-        local isNPC = string.find(nameLower, "npc") or string.find(nameLower, "witch") or obj:FindFirstChild("Humanoid") and not obj:FindFirstChild("Head") -- Evita focar em avatares/Humanoides de NPCs
         
-        if isTarget and not isNPC then
+        -- Lista Negra Rigorosa: Bloqueia qualquer NPC, bruxa, caldeirão, loja ou modelo com humanoide
+        local isBlacklisted = string.find(nameLower, "witch") or 
+                              string.find(nameLower, "npc") or 
+                              string.find(nameLower, "cauldron") or 
+                              string.find(nameLower, "shop") or 
+                              string.find(nameLower, "quest") or
+                              obj:FindFirstChildOfClass("Humanoid") or
+                              obj.Parent:FindFirstChildOfClass("Humanoid")
+        
+        if isTarget and not isBlacklisted then
             local part = nil
             if obj:IsA("Model") and obj.PrimaryPart then
                 part = obj.PrimaryPart
@@ -115,7 +123,7 @@ local function getNearestIsland()
     return nearestPos
 end
 
--- // Loop Principal de Farm Sequencial com Limite de Tempo por Alvo
+-- // Loop Principal de Farm Sequencial
 task.spawn(function()
     while FARM_ACTIVE do
         task.wait(0.2)
@@ -126,7 +134,7 @@ task.spawn(function()
             local targetPos = targetData.Part.Position + Vector3.new(0, 5, 0)
             smoothTweenTo(targetPos)
             
-            -- Coleta o item. Se por acaso demorar mais de 3 segundos, ele desiste e vai pro próximo (evita travar em bug)
+            -- Coleta o item. Timeout de segurança de 3 segundos
             local startTime = tick()
             while targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
                 attackPumpkin()
@@ -140,8 +148,7 @@ task.spawn(function()
         end
     end
 end)
-```[cite: 1]
+```[cite: 1, 2]
 
-### O que foi corrigido:
-1. **Filtro Ant-NPC (`isNPC`):** Adicionei uma checagem para que o script ignore completamente qualquer entidade que seja a Bruxa (*Witch*) ou outros NPCs com estrutura de Humanoid.
-2. **Timeout de Segurança (3 segundos):** Mesmo que algum objeto estranho seja selecionado por engano, o script agora desiste dele após 3 segundos e pula para o próximo alvo, impedindo que o seu personagem fique preso em telas de diálogo[cite: 1].
+### O que mudou:
+Adicionei o bloqueio explícito para `"witch"`, `"cauldron"` (caldeirão) e a verificação de `Humanoid` (`obj:FindFirstChildOfClass("Humanoid")`). Dessa forma, a Bruxa e os itens ao redor dela na praça vão ser totalmente ignorados pelo script, focando apenas nas abóboras e doces espalhados[cite: 1, 2]!

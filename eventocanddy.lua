@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -84,7 +85,7 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 -- // ==========================================
--- // FUNÇÕES DE FARM
+-- // FUNÇÕES DE FARM E COLETA
 -- // ==========================================
 
 local function bypassCollisions()
@@ -111,6 +112,15 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
+-- Função segura para interagir/atacar usando o VirtualUser do Roblox
+local function clickTarget()
+    pcall(function()
+        VirtualUser:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.ViewportSize)
+        task.wait(0.05)
+        VirtualUser:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.ViewportSize)
+    end)
+end
+
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -127,11 +137,14 @@ local function getClosestPumpkin()
         local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
         local grandParentName = obj.Parent and obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
         
-        local isNearWitchShop = string.find(parentName, "witch") or string.find(grandParentName, "witch") or
-                              string.find(parentName, "npc") or string.find(grandParentName, "npc") or
-                              string.find(parentName, "shop") or string.find(parentName, "cauldron")
+        -- Ignora portas, paredes e estruturas de casas/lojas
+        local isStructureOrDoor = string.find(parentName, "door") or string.find(grandParentName, "door") or
+                                  string.find(parentName, "wall") or string.find(grandParentName, "wall") or
+                                  string.find(parentName, "house") or string.find(grandParentName, "house") or
+                                  string.find(parentName, "witch") or string.find(grandParentName, "witch") or
+                                  string.find(parentName, "npc") or string.find(parentName, "shop")
         
-        if isTarget and not isNearWitchShop then
+        if isTarget and not isStructureOrDoor then
             local part = nil
             if obj:IsA("Model") and obj.PrimaryPart then
                 part = obj.PrimaryPart
@@ -144,10 +157,12 @@ local function getClosestPumpkin()
             end
             
             if part then
-                local dist = (currentPos - part.Position).Magnitude
-                if dist < shortestDist then
-                    shortestDist = dist
-                    closest = {Object = obj, Part = part}
+                if part.Size.Magnitude < 25 then
+                    local dist = (currentPos - part.Position).Magnitude
+                    if dist < shortestDist then
+                        shortestDist = dist
+                        closest = {Object = obj, Part = part}
+                    end
                 end
             end
         end
@@ -187,9 +202,12 @@ task.spawn(function()
                 local targetPos = targetData.Part.Position + Vector3.new(0, 5, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Como os itens do evento de Halloween no Blox Fruits somem automaticamente ao encostar/aproximar, 
-                -- o personagem apenas chega até eles, garantindo coleta limpa sem erros de input.
-                task.wait(0.5)
+                -- Ataca / Coleta até a abóbora sumir do mapa ou dar o tempo limite de 3 segundos
+                local startTime = tick()
+                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
+                    clickTarget()
+                    task.wait(0.15)
+                end
             else
                 local nextIsland = getNearestIsland()
                 smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))

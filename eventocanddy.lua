@@ -1,81 +1,97 @@
--- Configurações Iniciais
-local Settings = {
-    Range = 15,              -- Distância máxima para detectar abóboras (em studs)
-    Speed = 20,              -- Velocidade de movimento (ajuste conforme sua fruta)
-    WaitTime = 3.0,          -- Tempo de espera após coletar uma abóbora
-    FruitName = "Watermelon" -- Fruta recomendada para farmar rápido
-}
+-- // Configurações Iniciais & Serviços
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
 
--- Variáveis Principais
-local Player = game.Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-local HumanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
-local Humanoid = Character:FindFirstChild("Humanoid")
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
-if not HumanoidRootPart then return end
+-- // Parâmetros de Configuração
+local SPEED = 250 -- Velocidade em studs/s (estável e segura)
+local FARM_ACTIVE = true
 
--- Função para encontrar a abóbora mais próxima
-local function FindNearestPumpkin()
-    local pumpkins = workspace:GetChildren()
-    
-    -- Filtra apenas partes que parecem ser abóboras (ajuste o nome se necessário)
-    local targets = {}
-    for _, part in ipairs(pumpkins) do
-        if part.Name:lower():find("pumpkin") or part.Name == "Pumpkin" then
-            table.insert(targets, part)
+-- // Função para desativar colisões e evitar travar no cenário
+local function bypassCollisions()
+    for _, part in ipairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
         end
     end
-    
-    -- Ordena por distância e retorna a mais próxima
-    local nearest = nil
-    local minDistance = Settings.Range + 10
-    
-    for _, target in ipairs(targets) do
-        if not target:IsA("Model") and not target:IsA("Part") then continue end
-        
-        local dist = HumanoidRootPart:Distance(target.Position)
-        
-        -- Verifica se está dentro da distância de detecção e não muito longe para evitar lag
-        if dist < minDistance then
-            nearest = target
-            minDistance = dist
-        end
-    end
-    
-    return nearest, minDistance
 end
 
--- Função principal do loop
-local function FarmLoop()
-    while true do
-        local pumpkin, distance = FindNearestPumpkin()
+-- // Função de Tween para movimentação suave até o alvo
+local function tweenTo(targetPosition)
+    local distance = (HumanoidRootPart.Position - targetPosition).Magnitude
+    local timeToTravel = distance / SPEED
+    
+    local tweenInfo = TweenInfo.new(timeToTravel, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition + Vector3.new(0, 5, 0))})
+    
+    bypassCollisions()
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+-- // Função para simular o ataque/clique na abóbora
+local function simulateClick()
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+    task.wait(0.1)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+end
+
+-- // Varredura e Loop de Farm
+task.spawn(function()
+    while FARM_ACTIVE do
+        task.wait(0.5)
         
-        if pumpkin and distance < Settings.Range then
-            -- Se encontrou uma abóbora próxima, move até ela
-            local targetPos = pumpkin.Position
+        -- Garante referência atualizada do personagem
+        Character = LocalPlayer.Character
+        if Character and Character:FindFirstChild("HumanoidRootPart") then
+            HumanoidRootPart = Character.HumanoidRootPart
             
-            -- Ajusta a altura para não colidir com o chão (opcional)
-            local offset = CFrame.new(0, 2, 0) 
-            local finalCFrame = CFrame.fromAxis(targetPos - HumanoidRootPart.Position + offset) * CFrame.new(HumanoidRootPart.CFrame.LookVector.X, 0, HumanoidRootPart.CFrame.LookVector.Z)
+            local foundTarget = false
             
-            -- Move suavemente até a posição da abóbora
-            HumanoidRootPart.CFrame = HumanoidRootPart.CFrame:Lerp(CFrame.fromAxis(targetPos), 1) * CFrame.new(0, 2, 0)
-            
-            -- Pequeno delay para garantir que o jogo detecte a proximidade
-            wait(1.5)
-            
-            -- Se estiver muito perto (ex: 3 studs), considera coletado e espera um pouco
-            if HumanoidRootPart:Distance(pumpkin.Position) < 4 then
-                print("Abóbora coletada!")
-                wait(Settings.WaitTime)
+            -- Varre o Workspace em busca de abóboras ou itens do evento
+            for _, obj in ipairs(Workspace:GetDescendants()) do
+                if not FARM_ACTIVE then break end
+                
+                -- Identifica o objeto pelo nome (Pumpkin, Abóbora, Candy ou similares)
+                local nameLower = string.lower(obj.Name)
+                if string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy") then
+                    local targetPart = nil
+                    
+                    if obj:IsA("Model") and obj.PrimaryPart then
+                        targetPart = obj.PrimaryPart
+                    elseif obj:IsA("BasePart") then
+                        targetPart = obj
+                    elseif obj:FindFirstChild("HumanoidRootPart") then
+                        targetPart = obj.HumanoidRootPart
+                    elseif obj:FindFirstChildWhichIsA("BasePart") then
+                        targetPart = obj:FindFirstChildWhichIsA("BasePart")
+                    end
+                    
+                    if targetPart then
+                        foundTarget = true
+                        
+                        -- Move até o alvo
+                        tweenTo(targetPart.Position)
+                        
+                        -- Fica batendo/coletando até o objeto sumir ou ser coletado
+                        local startTime = tick()
+                        while obj and obj.Parent and (tick() - startTime < 3) do
+                            simulateClick()
+                            task.wait(0.2)
+                        end
+                    end
+                end
             end
             
-        else
-            -- Se não houver abóboras próximas, move para a última posição conhecida ou pausa levemente
-            wait(0.5)
+            -- Se não achar nada no Workspace, aguarda um instante antes de nova varredura
+            if not foundTarget then
+                task.wait(1)
+            end
         end
     end
-end
-
--- Inicia o loop
-FarmLoop()
+end)

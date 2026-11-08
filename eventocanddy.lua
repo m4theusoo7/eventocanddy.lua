@@ -1,19 +1,19 @@
--- Configurações e Serviços
+-- Serviços do Roblox
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
--- Variável de estado do Farm (Começa DESATIVADO)
-local FarmAtivo = false
-local TeclaAtivacao = Enum.KeyCode.E -- Mude aqui se quiser outra tecla
+-- Configurações do Farm
+local FarmAboboraAtivo = false
+local TeclaAtivacao = Enum.KeyCode.E -- Tecla para Ativar/Desativar
 
--- Função para equipar a arma e atacar diretamente pelo código
-local function atacarAbobora()
+-- Função de Auto-Clicker Nativo (Ataca direto na ferramenta)
+local function deitarSoco()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local tool = Character:FindFirstChildWhichIsA("Tool")
     
-    -- Se não estiver segurando nada, procura na Mochila e equipa
+    -- Se não estiver segurando nada, pega o estilo de luta na Mochila
     if not tool then
         local backpack = LocalPlayer:FindFirstChild("Backpack")
         local combat = backpack and (backpack:FindFirstChild("Combat") or backpack:FindFirstChild("Combate"))
@@ -23,42 +23,42 @@ local function atacarAbobora()
         end
     end
     
-    -- Dispara o ataque nativo do estilo de luta (Auto-Clicker real)
+    -- Ativa o ataque da ferramenta
     if tool then
         tool:Activate()
     end
 end
 
--- Loop principal do Farm
+-- Loop Principal do Farm de Abóboras do Chão
 task.spawn(function()
     while true do
         task.wait(0.1)
         
-        if FarmAtivo then
+        if FarmAboboraAtivo then
             Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
             local humanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
             
             if humanoidRootPart then
-                -- Varre o Workspace procurando as abóboras
-                for _, object in pairs(game:GetService("Workspace"):GetDescendants()) do
-                    if not FarmAtivo then break end -- Para o loop imediatamente se desligar
+                -- Varre o Workspace procurando as abóboras de evento
+                for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
+                    if not FarmAboboraAtivo then break end
                     
-                    if object:IsA("Model") and string.find(string.lower(object.Name), "pumpkin") then
-                        local targetPart = object:FindFirstChildWhichIsA("BasePart")
+                    -- Filtra objetos que tenham "pumpkin" no nome interno
+                    if obj:IsA("Model") and string.find(string.lower(obj.Name), "pumpkin") then
+                        local rootPart = obj:FindFirstChildWhichIsA("BasePart")
                         
-                        if targetPart then
-                            -- Loop de ataque enquanto a abóbora existir e o farm estiver ligado
-                            while FarmAtivo and object and object.Parent and targetPart.Parent do
-                                task.wait(0.05) -- Velocidade do clique e ajuste de posição
-                                
-                                -- Teletransporta e cola na abóbora (posição ajustada um pouco para o lado/cima para acertar o hitbox)
-                                if humanoidRootPart and targetPart then
-                                    humanoidRootPart.CFrame = targetPart.CFrame * CFrame.new(0, 1.5, 0)
-                                end
-                                
-                                -- Executa o ataque direto
-                                atacarAbobora()
+                        -- Loop de ataque na abóbora atual até ela quebrar e sumir do jogo
+                        while FarmAboboraAtivo and obj and obj.Parent and rootPart and rootPart.Parent do
+                            task.wait(0.03) -- Velocidade rápida de posicionamento e soco
+                            
+                            -- Garante o teletransporte colado na abóbora
+                            if humanoidRootPart and rootPart then
+                                -- Posiciona você um pouco acima dela para garantir que o soco pegue sem bugar no chão
+                                humanoidRootPart.CFrame = rootPart.CFrame * CFrame.new(0, 1.8, 0)
                             end
+                            
+                            -- Desfere o ataque automático
+                            deitarSoco()
                         end
                     end
                 end
@@ -67,16 +67,16 @@ task.spawn(function()
     end
 end)
 
--- Sistema de Liga / Desliga por Tecla
+-- Ativador por tecla
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end -- Ignora se você estiver digitando no chat
+    if gameProcessed then return end
     
     if input.KeyCode == TeclaAtivacao then
-        FarmAtivo = not FarmAtivo
-        if FarmAtivo then
-            print("=== FARM DE ABÓBORA: ATIVADO ===")
+        FarmAboboraAtivo = not FarmAboboraAtivo
+        if FarmAboboraAtivo then
+            print("=== FARM DE PUMPKIN (CHÃO): ATIVADO ===")
         else
-            print("=== FARM DE ABÓBORA: DESATIVADO ===")
+            print("=== FARM DE PUMPKIN (CHÃO): DESATIVADO ===")
         end
     end
 end)

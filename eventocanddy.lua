@@ -1,76 +1,46 @@
-local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local rootpart = character:FindFirstChild("HumanoidRootPart")
-local humanoid = character:FindFirstChild("Humanoid")
+--[[
+    SCRIPT DE AUTOMAÇÃO PARA FARMING DA ABÓBORA NO BLOX FRUITS
+    Instruções: Coloque este script em um LocalScript dentro de StarterPlayerScripts.
+]]
 
--- Configurações
-local speed = 15 -- Velocidade de movimento (ajuste se for muito rápido)
-local attackRange = 7 -- Distância para atacar/interagir
-local pumpkinName = "Pumpkin" -- Nome padrão, mas o script procura por qualquer coisa com esse nome
+-- 1. Variáveis Globais (Configurações)
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Player = Players.LocalPlayer -- Pega o jogador que está rodando o script
 
-print("🎃 Script de Abóbora Iniciado...")
+-- Configuração do tempo de espera entre os cliques (em segundos). 
+-- Um valor menor significa farm mais rápido, mas pode sobrecarregar o jogo.
+local TEMPO_DE_ESPERA = 0.5 
 
--- Função para encontrar a abóbora mais próxima (busca recursiva)
-local function FindNearestTarget()
-    local targets = {}
-    
-    -- Procura em todo o workspace
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if string.find(obj.Name, pumpkinName) and obj:IsA("Part") then
-            table.insert(targets, obj)
-        end
-    end
-    
-    -- Se não achar nada com "Pumpkin", tenta encontrar objetos grandes (caso seja um modelo)
-    if #targets == 0 then
-        for _, obj in ipairs(workspace:GetDescendants()) do
-             if string.find(obj.Name, pumpkinName) and obj:IsA("Model") or obj:IsA("Part") then
-                table.insert(targets, obj)
-            end
-        end
-    end
-    
-    -- Ordena por distância e retorna a mais próxima
-    if #targets > 0 then
-        local nearest = targets[1]
-        for _, target in ipairs(targets) do
-            if (rootpart.Position - target.Position).Magnitude < (rootpart.Position - nearest.Position).Magnitude then
-                nearest = target
-            end
-        end
-        return nearest
-    else
-        return nil
-    end
-end
+-- Nome exato da parte/objeto que representa a abóbora no mapa.
+-- Se houver várias abóboras, você precisará ajustar este nome ou usar um loop de busca!
+local NOME_DA_ABOBORA = "Pumpkin" -- Assumindo que o objeto se chama "Pumpkin"
 
--- Loop principal do script
-while true do
-    local target = FindNearestTarget()
-    
-    if target and rootpart and humanoid then
-        -- Verifica distância
-        local distance = (rootpart.Position - target.Position).Magnitude
-        
-        if distance <= attackRange then
-            print("🎃 Abóbora encontrada! Atacando...")
+print("🤖 Script de Farm da Abóbora Iniciado!")
+
+-- 2. Função Principal (O Loop de Farming)
+local function farmarAbobora()
+    while true do
+        -- Tenta encontrar a abóbora no ambiente (Workspace)
+        local pumpkinPart = Workspace:FindFirstChild(NOME_DA_ABOBORA)
+
+        if pumpkinPart then
+            print("✅ Abóbora encontrada! Iniciando clique...")
             
-            -- Move o personagem até a posição exata da abóbora
-            rootpart.CFrame = CFrame.new(target.Position, target.Position + Vector3.new(0, 1.5, 0))
-            
-            -- Pequeno delay para garantir que bateu antes de procurar outra
-            wait(2) 
+            -- 3. Ação de Destruição/Coleta (O Clique!)
+            -- O método :Click() simula o clique do mouse no objeto, acionando a mecânica do jogo.
+            pumpkinPart:Click() 
+
+            print("✨ Abóbora clicada com sucesso! Aguardando...")
         else
-            -- Se estiver longe, move em direção à abóbora
-            local direction = (target.Position - rootpart.Position).Unit
-            rootpart:MoveTo(rootpart.Position + direction * speed)
-            
-            -- Mantém o personagem olhando para a abóbora
-            humanoid.HumanoidRootPart.CFrame = CFrame.new(rootpart.Position, target.Position)
+            warn("❌ Abóbora não encontrada! Verifique se o nome está correto ou se ela sumiu.")
         end
-        
-    else
-        print("🔍 Procurando abóboras...")
-        wait(5) -- Espera 5 segundos se não encontrar nenhuma
+
+        -- 4. Espera (O Delay)
+        -- O script pausa por TEMPO_DE_ESPERA antes de procurar e clicar novamente.
+        wait(TEMPO_DE_ESPERA)
     end
 end
+
+-- Inicia a função principal para que o farming comece imediatamente!
+farmarAbobora()

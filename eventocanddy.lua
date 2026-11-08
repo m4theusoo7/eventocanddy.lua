@@ -1,6 +1,7 @@
 -- Serviços do Roblox
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
@@ -8,25 +9,44 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local FarmAboboraAtivo = false
 local TeclaAtivacao = Enum.KeyCode.E -- Tecla para Ativar/Desativar
 
--- Função de Auto-Clicker Nativo (Ataca direto na ferramenta)
+-- Função de Auto-Clicker Avançado (Força o dano via Remotes do Blox Fruits)
 local function deitarSoco()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local tool = Character:FindFirstChildWhichIsA("Tool")
     
-    -- Se não estiver segurando nada, pega o estilo de luta na Mochila
+    -- Se não estiver segurando nada, equipa o estilo de luta atual automaticamente
     if not tool then
         local backpack = LocalPlayer:FindFirstChild("Backpack")
-        local combat = backpack and (backpack:FindFirstChild("Combat") or backpack:FindFirstChild("Combate"))
-        if combat then
-            combat.Parent = Character
-            tool = combat
+        for _, item in pairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and (item.ToolTip == "Melee" or item.Name == "Combat" or item.Name == "Combate") then
+                item.Parent = Character
+                tool = item
+                break
+            end
         end
     end
     
-    -- Ativa o ataque da ferramenta
+    -- Ativa a ferramenta visualmente
     if tool then
         tool:Activate()
     end
+    
+    -- BYPASS DE DANO: Força o envio do hit direto para o servidor do Blox Fruits
+    pcall(function()
+        local net = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
+        if net then
+            -- Tenta os dois formatos comuns de Remote de ataque do jogo
+            local registerAttack = net:FindFirstChild("RegisterAttack") or ReplicatedStorage:FindFirstChild("RegisterAttack")
+            local combatClick = net:FindFirstChild("打") or net:FindFirstChild("CombatClick")
+            
+            if registerAttack then
+                registerAttack:FireServer()
+            end
+            if combatClick then
+                combatClick:FireServer()
+            end
+        end
+    end)
 end
 
 -- Loop Principal do Farm de Abóboras do Chão
@@ -49,15 +69,15 @@ task.spawn(function()
                         
                         -- Loop de ataque na abóbora atual até ela quebrar e sumir do jogo
                         while FarmAboboraAtivo and obj and obj.Parent and rootPart and rootPart.Parent do
-                            task.wait(0.03) -- Velocidade rápida de posicionamento e soco
+                            task.wait(0.05) -- Delay otimizado para registrar o dano e evitar lag de CFrame
                             
-                            -- Garante o teletransporte colado na abóbora
+                            -- Garante o teletransporte com distância de hitbox calibrada
                             if humanoidRootPart and rootPart then
-                                -- Posiciona você um pouco acima dela para garantir que o soco pegue sem bugar no chão
-                                humanoidRootPart.CFrame = rootPart.CFrame * CFrame.new(0, 1.8, 0)
+                                -- Posiciona você um pouco acima e rotaciona o personagem para baixo encarando o alvo
+                                humanoidRootPart.CFrame = rootPart.CFrame * CFrame.new(0, 2.2, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                             end
                             
-                            -- Desfere o ataque automático
+                            -- Desfere o ataque com bypass de dano
                             deitarSoco()
                         end
                     end
@@ -74,9 +94,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == TeclaAtivacao then
         FarmAboboraAtivo = not FarmAboboraAtivo
         if FarmAboboraAtivo then
-            print("=== FARM DE PUMPKIN (CHÃO): ATIVADO ===")
+            print("=== FARM DE PUMPKIN COM RE-HIT: ATIVADO ===")
         else
-            print("=== FARM DE PUMPKIN (CHÃO): DESATIVADO ===")
+            print("=== FARM DE PUMPKIN COM RE-HIT: DESATIVADO ===")
         end
     end
 end)

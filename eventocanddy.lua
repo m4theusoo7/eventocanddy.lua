@@ -1,126 +1,77 @@
--- =====================================================================
--- EXPERT PRODUCTION CODE: HIGH-PERFORMANCE PUMPKIN FARM (SEA 1)
--- =====================================================================
-
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- Configurações e Serviços
 local UserInputService = game:GetService("UserInputService")
-
+local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
--- Configurações de Estado
-_G.FarmAboboraDefinitivo = false
-local TeclaToggle = Enum.KeyCode.E
-local VelocidadeVoo = 350
+-- Variável de estado do Farm (Começa DESATIVADO)
+local FarmJackAtivo = false
+local TeclaAtivacao = Enum.KeyCode.P -- Pressione P para ligar/desligar
 
--- [RESOLUÇÃO DO ERRO NIL]: Busca e valida dinamicamente os remotes sem chutar nomes falsos
-local NetFolder = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
-local AttackRemote = nil
-
-if NetFolder then
-    -- Procura pelos gatilhos reais de combate ativos na sessão
-    for _, child in pairs(NetFolder:GetChildren()) do
-        if child:IsA("RemoteEvent") and (string.find(child.Name, "Attack") or string.find(child.Name, "Click") or child.Name == "打") then
-            AttackRemote = child
-            break
-        end
-    end
-end
-
--- Se a pasta padrão falhar, busca na raiz do ReplicatedStorage
-if not AttackRemote then
-    AttackRemote = ReplicatedStorage:FindFirstChild("RegisterAttack") or ReplicatedStorage:FindFirstChild("CombatClick")
-end
-
--- [FAST ATTACK TOTALMENTE SEGURO CONTRA NIL]
-local function executarAtaqueServidor()
+-- Função de Auto-Clicker Nativo
+local function atacar()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local tool = Character:FindFirstChildWhichIsA("Tool")
     
-    -- Auto-Equip do estilo de luta (Melee)
+    -- Se não estiver segurando o estilo de luta, equipa automaticamente
     if not tool then
         local backpack = LocalPlayer:FindFirstChild("Backpack")
-        if backpack then
-            for _, item in pairs(backpack:GetChildren()) do
-                if item:IsA("Tool") and (item.ToolTip == "Melee" or item.Name == "Combat" or item.Name == "Combate") then
-                    item.Parent = Character
-                    tool = item
-                    break
-                end
-            end
+        local combat = backpack and (backpack:FindFirstChild("Combat") or backpack:FindFirstChild("Combate"))
+        if combat then
+            combat.Parent = Character
+            tool = combat
         end
     end
-
-    -- Ativação física local (Gera o Hitbox do braço)
-    if tool then 
-        tool:Activate() 
-    end
-
-    -- Dispara o remote usando o método correto do Roblox (:FireServer) envolto em pcall protetor
-    if AttackRemote and AttackRemote:IsA("RemoteEvent") then
-        pcall(function()
-            AttackRemote:FireServer()
-        end)
+    
+    -- Ataca
+    if tool then
+        tool:Activate()
     end
 end
 
--- [SISTEMA DE CFRAME FLUIDO]: Voa até o destino sem desviar ou bugar a física
-local function viajarFisicaLimpa(cframeAlvo)
-    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local hrp = Character:FindFirstChild("HumanoidRootPart")
-    local humanoid = Character:FindFirstChildOfClass("Humanoid")
-    if not hrp or not humanoid then return end
-
-    humanid.PlatformStand = true -- Desativa gravidade nativa do jogo
-    
-    while _G.FarmAboboraDefinitivo and (hrp.Position - cframeAlvo.p).Magnitude > 4 do
-        task.wait()
-        local direcao = (cframeAlvo.p - hrp.Position).Unit
-        hrp.Velocity = Vector3.new(0, 0, 0) -- Força vetor zero para evitar lag de queda
-        hrp.CFrame = hrp.CFrame + (direcao * (VelocidadeVoo * task.wait()))
-    end
-    
-    if _G.FarmAboboraDefinitivo then
-        hrp.CFrame = cframeAlvo
+-- Função para desativar o dano por queda ou empurrão durante o farm
+local function estabilizarPersonagem(hrp)
+    if hrp and hrp:FindFirstChild("BodyVelocity") == nil then
+        local bv = Instance.new("BodyVelocity")
+        bv.Velocity = Vector3.new(0, 0, 0)
+        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bv.Parent = hrp
     end
 end
 
--- [LOOP CRÍTICO DE GRIND DE ABÓBORAS]
+-- Loop Principal de Farm do Boss Jack O' Lantern
 task.spawn(function()
     while true do
-        task.wait(0.5)
+        task.wait(0.1)
         
-        if _G.FarmAboboraDefinitivo then
+        if FarmJackAtivo then
             Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-            local hrp = Character:FindFirstChild("HumanoidRootPart")
+            local humanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
             
-            if hrp then
-                for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
-                    if not _G.FarmAboboraDefinitivo then break end
+            if humanoidRootPart then
+                estabilizarPersonagem(humanoidRootPart)
+                
+                -- Procura pelo Boss no Workspace (verifica na pasta de Inimigos ou Workspace geral)
+                for _, npc in pairs(game:GetService("Workspace"):GetDescendants()) do
+                    if not FarmJackAtivo then break end
                     
-                    -- Localiza objetos físicos válidos do evento que contenham Pumpkin
-                    if obj:IsA("BasePart") and string.find(string.lower(obj.Name), "pumpkin") then
-                        -- Ignora malhas parciais ou invisíveis para focar na colisão principal
-                        if obj.CanCollide == false and obj.Size.Magnitude < 1 then 
-                            continue 
-                        end
+                    -- Verifica se o nome do NPC é Jack O' Lantern ou Dapper Jack
+                    if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 and 
+                       (string.find(string.lower(npc.Name), "jack") or string.find(string.lower(npc.Name), "lantern")) then
                         
-                        -- Alinha o personagem virado para baixo exatamente em cima do hitbox
-                        local pontoExato = obj.CFrame * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                        local npcHrp = npc:FindFirstChild("HumanoidRootPart")
                         
-                        -- Executa o movimento frame por frame
-                        viajarFisicaLimpa(pontoExato)
-                        
-                        -- Bate continuamente até que a abóbora suma do jogo
-                        while _G.FarmAboboraDefinitivo and obj and obj.Parent do
-                            task.wait(0.02)
+                        -- Loop de ataque focado no Boss até ele morrer ou o farm ser desligado
+                        while FarmJackAtivo and npc and npc.Parent and npc.Humanoid.Health > 0 and npcHrp do
+                            task.wait(0.02) -- Velocidade de clique rápida
                             
-                            if hrp and obj then
-                                hrp.CFrame = obj.CFrame * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                            -- Teletransporte seguro: Mantém você 4 studs ACIMA do Boss para ele não te acertar
+                            if humanoidRootPart and npcHrp then
+                                humanoidRootPart.CFrame = npcHrp.CFrame * CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                             end
                             
-                            executarAtaqueServidor()
+                            -- Desfere os golpes
+                            atacar()
                         end
                     end
                 end
@@ -129,18 +80,20 @@ task.spawn(function()
     end
 end)
 
--- Captura de ativador por tecla (E) com limpeza física completa ao desligar
+-- Sistema Liga/Desliga
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.KeyCode == TeclaToggle then
-        _G.FarmAboboraDefinitivo = not _G.FarmAboboraDefinitivo
-        print("[!] COORDENADOR INTERNO - Farm Geral:", _G.FarmAboboraDefinitivo and "ATIVADO" or "DESATIVADO")
-        
-        if not _G.FarmAboboraDefinitivo then
-            Character = LocalPlayer.Character
-            local humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-            if humanoid then 
-                humanoid.PlatformStand = false 
+    
+    if input.KeyCode == TeclaAtivacao then
+        FarmJackAtivo = not FarmJackAtivo
+        if FarmJackAtivo then
+            print("=== FARM DO BOSS JACK O' LANTERN: ATIVADO ===")
+        else
+            print("=== FARM DO BOSS JACK O' LANTERN: DESATIVADO ===")
+            -- Remove a estabilização para o personagem andar normal
+            local hrp = Character:FindFirstChild("HumanoidRootPart")
+            if hrp and hrp:FindFirstChild("BodyVelocity") then
+                hrp.BodyVelocity:Destroy()
             end
         end
     end

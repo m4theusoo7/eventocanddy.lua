@@ -2,19 +2,37 @@
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
 -- Configurações do Farm
 local FarmAboboraAtivo = false
-local TeclaAtivacao = Enum.KeyCode.E -- Tecla para Ativar/Desativar
+local TeclaAtivacao = Enum.KeyCode.E
+local VelocidadeTween = 350 -- Velocidade idêntica ao farm de baús seguro
 
--- Função de Auto-Clicker Avançado (Força o dano via Remotes do Blox Fruits)
-local function deitarSoco()
+-- Função para calcular e executar o Teletransporte (Igual ao Farm de Baús)
+local function teleportarPara(pos)
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local humanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
+    if not humanoidRootPart then return end
+
+    local distancia = (humanoidRootPart.Position - pos.p).Magnitude
+    local tempo = distancia / VelocidadeTween
+    
+    local tweenInfo = TweenInfo.new(tempo, Enum.EasingStyle.Linear)
+    local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = pos})
+    tween:Play()
+    tween.Completed:Wait()
+end
+
+-- Função de Ataque Avançada (Bypass definitivo de dano do Blox Fruits)
+local function causarDanoReal()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local tool = Character:FindFirstChildWhichIsA("Tool")
     
-    -- Se não estiver segurando nada, equipa o estilo de luta atual automaticamente
+    -- Auto-Equip do estilo de luta
     if not tool then
         local backpack = LocalPlayer:FindFirstChild("Backpack")
         for _, item in pairs(backpack:GetChildren()) do
@@ -26,24 +44,23 @@ local function deitarSoco()
         end
     end
     
-    -- Ativa a ferramenta visualmente
     if tool then
         tool:Activate()
     end
     
-    -- BYPASS DE DANO: Força o envio do hit direto para o servidor do Blox Fruits
+    -- Dispara os remotes de validação de hit obrigatórios do jogo
     pcall(function()
         local net = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
         if net then
-            -- Tenta os dois formatos comuns de Remote de ataque do jogo
             local registerAttack = net:FindFirstChild("RegisterAttack") or ReplicatedStorage:FindFirstChild("RegisterAttack")
-            local combatClick = net:FindFirstChild("打") or net:FindFirstChild("CombatClick")
+            local verifyBlank = net:FindFirstChild("VerifyBlank") or ReplicatedStorage:FindFirstChild("VerifyBlank")
             
             if registerAttack then
                 registerAttack:FireServer()
             end
-            if combatClick then
-                combatClick:FireServer()
+            if verifyBlank then
+                -- O VerifyBlank valida o clique vazio próximo ao hitbox
+                verifyBlank:FireServer()
             end
         end
     end)
@@ -59,26 +76,31 @@ task.spawn(function()
             local humanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
             
             if humanoidRootPart then
-                -- Varre o Workspace procurando as abóboras de evento
+                -- Varre o Workspace procurando as abóboras
                 for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
                     if not FarmAboboraAtivo then break end
                     
-                    -- Filtra objetos que tenham "pumpkin" no nome interno
                     if obj:IsA("Model") and string.find(string.lower(obj.Name), "pumpkin") then
                         local rootPart = obj:FindFirstChildWhichIsA("BasePart")
                         
-                        -- Loop de ataque na abóbora atual até ela quebrar e sumir do jogo
-                        while FarmAboboraAtivo and obj and obj.Parent and rootPart and rootPart.Parent do
-                            task.wait(0.05) -- Delay otimizado para registrar o dano e evitar lag de CFrame
+                        if rootPart and rootPart.Parent then
+                            -- Calcula a posição exata (Fica colado igual ao farm de baús)
+                            local posicaoAlvo = rootPart.CFrame * CFrame.new(0, 1.5, 0)
                             
-                            -- Garante o teletransporte com distância de hitbox calibrada
-                            if humanoidRootPart and rootPart then
-                                -- Posiciona você um pouco acima e rotaciona o personagem para baixo encarando o alvo
-                                humanoidRootPart.CFrame = rootPart.CFrame * CFrame.new(0, 2.2, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                            -- Executa o Tween até o destino
+                            teleportarPara(posicaoAlvo)
+                            
+                            -- Loop focado em quebrar o item com re-hit rápido quando chega perto
+                            while FarmAboboraAtivo and obj and obj.Parent and rootPart and rootPart.Parent do
+                                task.wait(0.02) -- Velocidade máxima de cliques por segundo
+                                
+                                -- Mantém o personagem grudado enquanto bate
+                                if humanoidRootPart and rootPart then
+                                    humanoidRootPart.CFrame = rootPart.CFrame * CFrame.new(0, 1.5, 0)
+                                end
+                                
+                                causarDanoReal()
                             end
-                            
-                            -- Desfere o ataque com bypass de dano
-                            deitarSoco()
                         end
                     end
                 end
@@ -94,9 +116,9 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == TeclaAtivacao then
         FarmAboboraAtivo = not FarmAboboraAtivo
         if FarmAboboraAtivo then
-            print("=== FARM DE PUMPKIN COM RE-HIT: ATIVADO ===")
+            print("=== FARM TWEEN PUMPKIN: ATIVADO ===")
         else
-            print("=== FARM DE PUMPKIN COM RE-HIT: DESATIVADO ===")
+            print("=== FARM TWEEN PUMPKIN: DESATIVADO ===")
         end
     end
 end)

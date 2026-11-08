@@ -11,7 +11,7 @@ local function encontrarItem()
     -- 1. Varre o Workspace principal e pastas comuns de loot/spawn
     for _, obj in pairs(Workspace:GetChildren()) do
         local nome = obj.Name:lower()
-        if nome:find("pumpkin") or nome:find("abobora") or nome:find("candy") or nome:find("chest") or nome:find("item") then
+        if nome:find("pumpkin") then
             if obj:IsA("Model") and obj.PrimaryPart then
                 return obj.PrimaryPart
             elseif obj:IsA("BasePart") then

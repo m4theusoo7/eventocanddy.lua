@@ -1,86 +1,85 @@
 -- =====================================================================
--- SCRIPT ESPECIALISTA: AUTO PUMPKIN GRIND (SEA 1 OPTIMIZED)
+-- SCRIPT CORRIGIDO: AUTO FARM PUMPKIN (SEA 1 - DANO REAL)
 -- =====================================================================
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
--- Configurações Globais
+-- Variáveis de Controle
 _G.FarmPumpkinsSea1 = false
 local TeclaToggle = Enum.KeyCode.E
-local VelocidadeVoo = 320 -- Velocidade calibrada padrão para farm de baús/itens no Sea 1
+local VelocidadeVoo = 350
 
--- Identificação automática dos remotes de combate oficiais do Blox Fruits
+-- Localização dos Remotes Oficiais de Validação de Hit do Blox Fruits
 local Net = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
-local RemoteAtaque = Net and (Net:FindFirstChild("RegisterAttack") or Net:FindFirstChild("CombatClick") or Net:FindFirstChild("打"))
+local AttackRemote = Net and (Net:FindFirstChild("RegisterAttack") or Net:FindFirstChild("CombatClick"))
+local VerifyRemote = Net and (Net:FindFirstChild("VerifyBlank") or Net:FindFirstChild("VerifyDamage"))
 
--- [SISTEMA DE MOVIMENTAÇÃO DINÂMICA]: Corta a física e viaja sem bugar em ilhas do Sea 1
-local function VoarAteAbobora(posicaoCFrame)
+-- Função de Ataque Corrigida (Força o Hitbox Físico e valida no Servidor)
+local function computarDanoReal()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local hrp = Character:FindFirstChild("HumanoidRootPart")
-    local humanoid = Character:FindFirstChildOfClass("Humanoid")
-    if not hrp or not humanoid then return end
-
-    -- Anula temporariamente animações de queda e atrito físico do jogo
-    local estadoAnterior = humanoid.PlatformStand
-    humanoid.PlatformStand = true
+    local tool = Character:FindFirstChildWhichIsA("Tool")
     
-    -- Injeta uma força estabilizadora para o boneco não tremer ou deslizar no ar
-    local estabilizador = hrp:FindFirstChild("AntiBugForce") or Instance.new("BodyVelocity")
-    estabilizador.Name = "AntiBugForce"
-    estabilizador.Velocity = Vector3.new(0, 0, 0)
-    estabilizador.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-    estabilizador.Parent = hrp
-
-    local distancia = (hrp.Position - posicaoCFrame.p).Magnitude
-    local tempoVoo = distancia / VelocidadeVoo
-
-    -- Executa o trajeto linear e aguarda a conclusão exata
-    local tween = TweenService:Create(hrp, TweenInfo.new(tempoVoo, Enum.EasingStyle.Linear), {CFrame = posicaoCFrame})
-    tween:Play()
-    tween.Completed:Wait()
-
-    -- Remove o estabilizador para liberar o personagem ao chegar
-    if estabilizador then estabilizador:Destroy() end
-    humanoid.PlatformStand = estadoAnterior
-end
-
--- [MECANISMO DE FAST ATTACK]: Força o servidor a computar o hit
-local function ExecutarDanoBypass()
-    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    
-    -- Auto-Equip do estilo de luta (Combate/Melee) sem quebrar o script
-    local ferramenta = Character:FindFirstChildWhichIsA("Tool")
-    if not ferramenta then
-        local mochila = LocalPlayer:FindFirstChild("Backpack")
-        if mochila then
-            for _, item in pairs(mochila:GetChildren()) do
+    -- Auto-Equip do Estilo de Luta
+    if not tool then
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            for _, item in pairs(backpack:GetChildren()) do
                 if item:IsA("Tool") and (item.ToolTip == "Melee" or item.Name == "Combat" or item.Name == "Combate") then
                     item.Parent = Character
-                    ferramenta = item
+                    tool = item
                     break
                 end
             end
         end
     end
 
-    -- Aciona a animação física local
-    if ferramenta then ferramenta:Activate() end
+    -- 1. Ativa a ferramenta localmente para abrir o Hitbox
+    if tool then 
+        tool:Activate() 
+    end
 
-    -- Envia o pacote de dano diretamente ao servidor
-    if RemoteAtaque then
-        pcall(function()
-            RemoteAtaque:FireServer()
-        end)
+    -- 2. Dispara a assinatura dupla necessária para o servidor aceitar o dano em objetos estáticos
+    pcall(function()
+        if AttackRemote then 
+            AttackRemote:FireServer() 
+        end
+        if VerifyRemote then 
+            -- Passa uma tabela vazia e o soco para validar o hit de colisão
+            VerifyRemote:FireServer(tool, "RightClick") 
+        end
+    end)
+end
+
+-- Função de Movimentação Direta (Igual aos scripts de baú de alto desempenho)
+local function moverAteAbobora(posAlvo)
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local hrp = Character:FindFirstChild("HumanoidRootPart")
+    local humanoid = Character:FindFirstChildOfClass("Humanoid")
+    if not hrp or not humanoid then return end
+
+    -- Corta a física de queda para não bugar entre as ilhas do Sea 1
+    humanoid.PlatformStand = true
+    
+    -- Loop de deslocamento direto de CFrame por frame (Substitui o Tween bugado)
+    while _G.FarmPumpkinsSea1 and (hrp.Position - posAlvo.p).Magnitude > 5 do
+        task.wait()
+        local direcao = (posAlvo.p - hrp.Position).Unit
+        hrp.Velocity = Vector3.new(0,0,0) -- Zera a gravidade do Roblox
+        hrp.CFrame = hrp.CFrame + (direcao * (VelocidadeVoo * task.wait()))
+    end
+    
+    -- Trava exatamente na posição final voltado para o item
+    if _G.FarmPumpkinsSea1 then
+        hrp.CFrame = posAlvo
     end
 end
 
--- [LOOP PRINCIPAL DE VARREDURA]: Caça um por um no Sea 1
+-- Loop de Varredura do Sea 1
 task.spawn(function()
     while true do
         task.wait(0.5)
@@ -90,33 +89,29 @@ task.spawn(function()
             local hrp = Character:FindFirstChild("HumanoidRootPart")
             
             if hrp then
-                -- Varre recursivamente todas as estruturas do mapa em busca de modelos de abóbora
-                for _, objeto in pairs(game:GetService("Workspace"):GetDescendants()) do
+                for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
                     if not _G.FarmPumpkinsSea1 then break end
                     
-                    -- Verifica se é um modelo válido de evento e se o nome contém "pumpkin"
-                    if objeto:IsA("Model") and string.find(string.lower(objeto.Name), "pumpkin") then
-                        local blocoFisico = objeto:FindFirstChildWhichIsA("BasePart")
+                    -- Filtra o modelo exato da abóbora
+                    if obj:IsA("Model") and string.find(string.lower(obj.Name), "pumpkin") then
+                        local partFisica = obj:FindFirstChildWhichIsA("BasePart")
                         
-                        -- Garante que o objeto ainda está gerado e ativo no mapa
-                        if blocoFisico and blocoFisico.Parent then
-                            -- Define a posição: 2 studs acima do item, rotacionando o personagem de cabeça para baixo para acertar em cheio
-                            local pontoDestino = blocoFisico.CFrame * CFrame.new(0, 2, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                        if partFisica and partFisica.Parent then
+                            -- Posição calibrada: 1.5 studs acima e rotacionando a câmera do boneco para baixo encarando o alvo
+                            local localAlvo = partFisica.CFrame * CFrame.new(0, 1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                             
-                            -- Move suavemente até o item
-                            VoarAteAbobora(pontoDestino)
+                            -- Executa a movimentação limpa
+                            moverAteAbobora(localAlvo)
                             
-                            -- Loop de ataque contínuo focado no item atual até ele sumir por completo
-                            while _G.FarmPumpkinsSea1 and objeto and objeto.Parent and blocoFisico and blocoFisico.Parent do
-                                task.wait(0.01) -- Frequência ultra rápida do Fast Attack
+                            -- Loop de Fast Attack: Bate até o objeto físico sumir do Workspace
+                            while _G.FarmPumpkinsSea1 and obj and obj.Parent and partFisica and partFisica.Parent do
+                                task.wait(0.02) -- Frequência ideal para o servidor processar a quebra
                                 
-                                -- Trava a posição milimetricamente contra empurrões externos ou rebotes
-                                if hrp and blocoFisico then
-                                    hrp.CFrame = blocoFisico.CFrame * CFrame.new(0, 2, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                                if hrp and partFisica then
+                                    hrp.CFrame = partFisica.CFrame * CFrame.new(0, 1.5, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                                 end
                                 
-                                -- Desfere o golpe no servidor
-                                ExecutarDanoBypass()
+                                computarDanoReal()
                             end
                         end
                     end
@@ -126,20 +121,20 @@ task.spawn(function()
     end
 end)
 
--- Captura o pressionamento da Tecla E para ligar/desligar de forma limpa
+-- Ativador (Tecla E)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == TeclaToggle then
         _G.FarmPumpkinsSea1 = not _G.FarmPumpkinsSea1
-        print("[!] SEA 1 FARM PUMPKIN:", _G.FarmPumpkinsSea1 and "LIGADO" or "DESLIGADO")
+        print("[!] STATUS DO FARM:", _G.FarmPumpkinsSea1 and "ATIVADO" or "DESATIVADO")
         
-        -- Limpeza imediata dos modificadores físicos ao desativar
+        -- Restaura o boneco quando o farm é desligado
         if not _G.FarmPumpkinsSea1 then
             Character = LocalPlayer.Character
             local humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
-            local hrp = Character and Character:FindFirstChild("HumanoidRootPart")
-            if humanoid then humanoid.PlatformStand = false end
-            if hrp and hrp:FindFirstChild("AntiBugForce") then hrp.AntiBugForce:Destroy() end
+            if humanoid then 
+                humanoid.PlatformStand = false 
+            end
         end
     end
 end)

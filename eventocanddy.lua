@@ -1,72 +1,110 @@
-local player = game.Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local rootpart = character:FindFirstChild("HumanoidRootPart")
+--[[
+    ======================================================
+    FRUIT FARM BOT - Blox Fruits Lua Script
+    Executor: Delta v2.745 (Compatível Luau)
+    Objetivo: Coletar automaticamente frutas (itens laranja/vermelhos) do chão próximo ao jogador.
+    Autor: [Seu Nome / IA Expert]
+    ======================================================
+]]
 
--- Configurações
-local speed = 28 -- Velocidade de movimento (Ajuste se quiser mais rápido)
-local pickupDistance = 3.5 -- Distância para pegar o item
-local checkInterval = 0.15 -- Tempo entre verificações (quanto menor, mais preciso)
+-- 1. Referências Essenciais
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
--- Função principal de loop
-while true do
-    wait(checkInterval)
-    
-    local targetItem = nil
-    
-    -- Procura por itens no chão
-    for _, part in pairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") then
-            -- Verifica se é um item pegável (tem PrimaryPartCFrame ou nome específico)
-            local isPickupable = false
-            
-            -- Método 1: Verifica propriedade PrimaryPartCFrame (padrão de itens no Blox Fruits)
-            if part.PrimaryPartCFrame then 
-                isPickupable = true
+-- Pega o jogador local (o usuário que está executando o script)
+local LocalPlayer = Players.LocalPlayer
+
+-- Verifica se o jogador existe antes de continuar
+if not LocalPlayer then
+    warn("[FRUIT FARM BOT] Erro: Jogador não encontrado no Workspace!")
+    return -- Para a execução do script se o jogador não estiver carregado
+end
+
+-- Pega o Character (o modelo do personagem)
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+
+-- Pega a parte principal do personagem (HumanoidRootPart - onde a física está ancorada)
+local RootPart = Character:FindFirstChild("HumanoidRootPart")
+
+if not RootPart then
+    warn("[FRUIT FARM BOT] Erro: HumanoidRootPart não encontrado no personagem!")
+    return
+end
+
+-- 2. Configurações do Farm Bot
+local MAX_DISTANCE = 10 -- Distância máxima (em studs) para o script procurar itens. Ajuste se necessário.
+local CHECK_INTERVAL = 0.1 -- Intervalo de checagem em segundos (quanto menor, mais rápido e mais CPU consome).
+
+-- Função principal que realiza a coleta do item
+local function CollectItem(itemPart: BasePart)
+    -- Verifica se o item já está anexado ou é parte do próprio personagem
+    if itemPart.Parent == Character or itemPart.Name == "HumanoidRootPart" then
+        return false -- Não precisa coletar, ele já está em algum lugar
+    end
+
+    print(`[FRUIT FARM BOT] Item encontrado! Coletando...`)
+
+    -- 1. Anexa o item ao personagem (Parenting)
+    itemPart.Parent = Character
+
+    -- 2. Posiciona o item na mão do jogador ou ligeiramente à frente dele
+    local targetCFrame = RootPart.CFrame * CFrame.new(0, 0, -3) -- Posição: 3 studs à frente do centro do personagem
+    itemPart:SetPrimaryPartCFrame(targetCFrame)
+
+    -- Opcional: Se o item for um modelo complexo (e não apenas uma Part), você deve usar SetPrimaryPartCFrame no MODELO.
+    -- Exemplo: local ItemModel = itemPart.Parent; ItemModel:SetPrimaryPartCFrame(targetCFrame)
+
+    return true -- Coleta bem-sucedida
+end
+
+
+-- 3. Loop Principal de Farming (Execução Contínua)
+print("=============================================")
+print("[FRUIT FARM BOT] Iniciado! Procurando frutas no chão...")
+print(`[FRUIT FARM BOT] Distância Máxima: {MAX_DISTANCE} studs | Intervalo: {CHECK_INTERVAL}s`)
+print("=============================================")
+
+while task.wait(CHECK_INTERVAL) do
+    local bestTarget = nil
+    local shortestDistance = MAX_DISTANCE + 1 -- Começa com uma distância maior que o máximo permitido
+
+    -- Itera sobre todos os objetos no Workspace (pode ser otimizado, mas é robusto)
+    for _, object in ipairs(Workspace:GetChildren()) do
+        -- Verifica se o objeto é um modelo ou parte e tem a propriedade de nome "Fruit"
+        if object:IsA("BasePart") and object.Name == "Fruit" then
+            local part = object :: BasePart
+
+            -- Calcula a distância entre o RootPart do jogador e este item
+            local distance = (RootPart.Position - part.Position).Magnitude
+
+            -- Verifica se está dentro da área de busca E se é mais próximo que o alvo atual
+            if distance <= MAX_DISTANCE and distance < shortestDistance then
+                bestTarget = part
+                shortestDistance = distance
             end
-            
-            -- Método 2: Verifica nomes comuns de itens/eventos (como Pumpkin, Item, etc.)
-            if not isPickupable and (part.Name == "Item" or part.Name == "Pumpkin" or part.Name == "JackO_Lantern") then
-                isPickupable = true
-            end
-            
-            -- Se for um item pegável e estiver perto
-            if isPickupable then
-                local distance = rootpart.Position:Distance(part.Position)
-                
-                if distance <= pickupDistance then
-                    targetItem = part
-                elseif distance < 15 and distance > pickupDistance then
-                    -- Se estiver dentro da área de busca, move-se para ele suavemente
-                    local direction = (part.CFrame.p - rootpart.CFrame.p).Unit * speed
-                    rootpart.CFrame = rootpart.CFrame + direction
-                    
-                    if distance <= pickupDistance then
-                        targetItem = part
-                    end
+        elseif object:IsA("Model") and object.Name == "Fruit" then
+             -- Se for um modelo, pegamos a parte principal (PrimaryPart) dele para cálculo de distância
+            local primaryPart = object.PrimaryPart
+            if primaryPart then
+                local distance = (RootPart.Position - primaryPart.Position).Magnitude
+
+                if distance <= MAX_DISTANCE and distance < shortestDistance then
+                    bestTarget = object -- Armazena o modelo inteiro
+                    shortestDistance = distance
                 end
             end
         end
     end
-    
-    -- Se encontrou o item, tenta pegar com segurança
-    if targetItem and targetItem.PrimaryPartCFrame then
-        tryCatch(targetItem:Pickup())
-    elseif targetItem then
-         -- Fallback para itens mais simples que não têm PrimaryPartCFrame direto
-         local pickupFunc = targetItem.Parent:FindFirstChild("PrimaryPartCFrame") or function(p) return p:Pickup end
-         if pickupFunc and type(pickupFunc) == "function" then 
-             tryCatch(pickupFunc(targetItem))
-         else
-            -- Tenta pegar diretamente se for um objeto simples
-            tryCatch(targetItem:Pickup())
-         end
-    end
-end
 
--- Função auxiliar para evitar erros no console
-local function tryCatch(func)
-    local success, result = pcall(func)
-    if not success then
-        print("Tentativa de pegar falhou (provavelmente já pegou ou está longe): " .. tostring(result))
+    -- Se um alvo foi encontrado, coleta ele!
+    if bestTarget then
+        local success = CollectItem(bestTarget)
+        
+        -- Opcional: Adicionar uma pequena pausa após a coleta para evitar spam de coleta no mesmo frame.
+        if success then
+            task.wait(0.05) 
+        end
     end
-end
+
+end -- Fim do loop while

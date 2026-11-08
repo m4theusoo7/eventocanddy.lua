@@ -1,153 +1,100 @@
---[[
-    ======================================================
-    BLOX FRUITS FARM SCRIPT - JACK O' LANTERN BOT
-    Executor: Delta v2.745 (Compatível com API moderna)
-    Função: Busca global por "Jack O' Lantern", move o jogador, 
-            e causa dano contínuo até que o item desapareça.
-    ======================================================
-]]
-
--- CONFIGURAÇÕES DO SCRIPT
-local TARGET_NAME = "Jack O' Lantern" -- Nome exato do item no Workspace
-local DAMAGE_AMOUNT = 25          -- Quantidade de dano a ser aplicado por ciclo (ajuste conforme necessário)
-local MOVE_TOLERANCE = 3           -- Distância máxima em studs para considerar que o jogador chegou ao alvo
-local FARMING_INTERVAL = 0.1       -- Tempo de espera entre cada aplicação de dano (em segundos)
-
--- REFERÊNCIAS DO JOGO
+-- Configurações e Serviços
+local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
-
--- VARIÁVEIS DE ESTADO
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local Humanoid = Character:WaitForChild("Humanoid")
-local TargetPart = nil -- Armazena a referência da parte alvo atual
 
-print("✅ [JackOLantern Farm Bot] Inicializado com sucesso!")
+-- Variável de estado do Farm (Começa DESATIVADO)
+local FarmJackAtivo = false
+local TeclaAtivacao = Enum.KeyCode.P -- Pressione P para ligar/desligar
 
+-- Função de Auto-Clicker Nativo
+local function atacar()
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local tool = Character:FindFirstChildWhichIsA("Tool")
+    
+    -- Se não estiver segurando o estilo de luta, equipa automaticamente
+    if not tool then
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        local combat = backpack and (backpack:FindFirstChild("Combat") or backpack:FindFirstChild("Combate"))
+        if combat then
+            combat.Parent = Character
+            tool = combat
+        end
+    end
+    
+    -- Ataca
+    if tool then
+        tool:Activate()
+    end
+end
 
--------------------------------------------------------------------
--- FUNÇÕES AUXILIARES
--------------------------------------------------------------------
+-- Função para desativar o dano por queda ou empurrão durante o farm
+local function estabilizarPersonagem(hrp)
+    if hrp and hrp:FindFirstChild("BodyVelocity") == nil then
+        local bv = Instance.new("BodyVelocity")
+        bv.Velocity = Vector3.new(0, 0, 0)
+        bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bv.Parent = hrp
+    end
+end
 
--- Função para encontrar o item mais próximo do jogador
-local function FindNearestTarget()
-    local nearestTarget = nil
-    local minDistance = math.huge -- Começa com a distância máxima possível
-    local playerPosition = Character:GetPrimaryPartCFrame().Position
-
-    print("🔍 Buscando todos os alvos de '" .. TARGET_NAME .. "' no Workspace...")
-
-    -- Itera sobre todos os filhos do Workspace (onde os itens geralmente estão)
-    for _, child in ipairs(Workspace:GetChildren()) do
-        -- Verifica se o nome corresponde ao alvo
-        if child.Name == TARGET_NAME then
-            local targetPart = child -- Assume que o item é uma Part ou Model contendo a Part principal
-
-            -- Se for um modelo, tenta encontrar a parte principal (PrimaryPart)
-            local partToMeasure = targetPart:IsA("Model") and targetPart.PrimaryPart or targetPart
+-- Loop Principal de Farm do Boss Jack O' Lantern
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        
+        if FarmJackAtivo then
+            Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+            local humanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
             
-            if partToMeasure and partToMeasure:IsA("BasePart") then
-                local distance = (playerPosition - partToMeasure.Position).Magnitude
-
-                -- Se este alvo for mais próximo que o atual mínimo, ele se torna o novo alvo
-                if distance < minDistance then
-                    minDistance = distance
-                    nearestTarget = targetPart
+            if humanoidRootPart then
+                estabilizarPersonagem(humanoidRootPart)
+                
+                -- Procura pelo Boss no Workspace (verifica na pasta de Inimigos ou Workspace geral)
+                for _, npc in pairs(game:GetService("Workspace"):GetDescendants()) do
+                    if not FarmJackAtivo then break end
+                    
+                    -- Verifica se o nome do NPC é Jack O' Lantern ou Dapper Jack
+                    if npc:IsA("Model") and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 and 
+                       (string.find(string.lower(npc.Name), "jack") or string.find(string.lower(npc.Name), "lantern")) then
+                        
+                        local npcHrp = npc:FindFirstChild("HumanoidRootPart")
+                        
+                        -- Loop de ataque focado no Boss até ele morrer ou o farm ser desligado
+                        while FarmJackAtivo and npc and npc.Parent and npc.Humanoid.Health > 0 and npcHrp do
+                            task.wait(0.02) -- Velocidade de clique rápida
+                            
+                            -- Teletransporte seguro: Mantém você 4 studs ACIMA do Boss para ele não te acertar
+                            if humanoidRootPart and npcHrp then
+                                humanoidRootPart.CFrame = npcHrp.CFrame * CFrame.new(0, 4, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                            end
+                            
+                            -- Desfere os golpes
+                            atacar()
+                        end
+                    end
                 end
             end
         end
     end
+end)
 
-    return nearestTarget -- Retorna a referência do modelo/parte mais próxima
-end
-
-
--- Função principal de combate e farm
-local function FarmLoop()
-    while true do
-        -- 1. BUSCA E SELEÇÃO DO ALVO (Garante que sempre pegamos o alvo mais próximo)
-        if not TargetPart or not TargetPart:IsDescendantOf(Workspace) then
-            TargetPart = FindNearestTarget()
-
-            if not TargetPart then
-                print("⚠️ Nenhum item '" .. TARGET_NAME .. "' encontrado no mapa. Aguardando e tentando novamente...")
-                task.wait(5) -- Espera 5 segundos antes de tentar buscar outro alvo
-                continue -- Volta para o início do loop principal
+-- Sistema Liga/Desliga
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == TeclaAtivacao then
+        FarmJackAtivo = not FarmJackAtivo
+        if FarmJackAtivo then
+            print("=== FARM DO BOSS JACK O' LANTERN: ATIVADO ===")
+        else
+            print("=== FARM DO BOSS JACK O' LANTERN: DESATIVADO ===")
+            -- Remove a estabilização para o personagem andar normal
+            local hrp = Character:FindFirstChild("HumanoidRootPart")
+            if hrp and hrp:FindFirstChild("BodyVelocity") then
+                hrp.BodyVelocity:Destroy()
             end
-
-            -- Se encontramos um novo alvo, informamos a distância inicial
-            local distance = (Character:GetPrimaryPartCFrame().Position - TargetPart.PrimaryPart.Position).Magnitude
-            print("🎯 Novo Alvo Selecionado! Distância: " .. math.floor(distance) .. " studs.")
         end
-
-        -- 2. MOVIMENTO PARA O ALVO
-        local targetPosition = TargetPart.PrimaryPart.Position
-        Humanoid:MoveTo(targetPosition)
-
-        -- Espera o personagem se mover para perto do alvo (usamos um pequeno loop de verificação)
-        local distanceCheck = (Character:GetPrimaryPartCFrame().Position - targetPosition).Magnitude
-        while Humanoid.MoveToFinished == false and distanceCheck > MOVE_TOLERANCE do
-            task.wait(0.1) -- Espera 100ms e verifica novamente
-            distanceCheck = (Character:GetPrimaryPartCFrame().Position - targetPosition).Magnitude
-        end
-
-        -- Se o movimento falhar ou for muito lento, apenas espera um pouco antes de atacar
-        if distanceCheck > MOVE_TOLERANCE * 2 then
-             print("💨 Movimento demorado. Tentando ataque mesmo à distância.")
-        end
-
-
-        -- 3. APLICAÇÃO DE DANO (O Loop de Farm)
-        local targetPartPrimary = TargetPart.PrimaryPart
-
-        if not targetPartPrimary or not targetPartPrimary:FindFirstChildOfClass("Humanoid") then
-            print("❌ Erro na referência do alvo ou falta Humanoid! Tentando buscar novamente...")
-            TargetPart = nil -- Força a busca de um novo alvo no próximo ciclo
-            task.wait(1)
-            continue
-        end
-
-        -- Loop de combate contínuo enquanto o item existir
-        while TargetPart and TargetPart:IsDescendantOf(Workspace) do
-            local currentDistance = (Character:GetPrimaryPartCFrame().Position - targetPartPrimary.Position).Magnitude
-            
-            -- Se estiver muito longe, move novamente para garantir que não perca o alvo
-            if currentDistance > MOVE_TOLERANCE * 3 then
-                Humanoid:MoveTo(targetPosition)
-                task.wait(0.2) -- Espera um pouco mais antes de atacar de novo
-            end
-
-            -- Aplica o dano ao Humanoid do item
-            local targetHumanoid = targetPartPrimary:FindFirstChildOfClass("Humanoid")
-            if targetHumanoid then
-                targetHumanoid:TakeDamage(DAMAGE_AMOUNT)
-                print("⚔️ Dano aplicado! Total de vida restante: " .. math.floor(targetHumanoid.Health))
-            else
-                 -- Se o Humanoid sumiu, mas a Part ainda existe (raro), tenta forçar um novo alvo
-                 break 
-            end
-
-            task.wait(FARMING_INTERVAL) -- Espera antes do próximo ataque
-        end
-
-        print("✨ Alvo destruído! Iniciando busca por um novo Jack O' Lantern...")
     end
-end
-
-
--------------------------------------------------------------------
--- INÍCIO DA EXECUÇÃO DO SCRIPT
--------------------------------------------------------------------
-
--- Garante que o personagem e o Humanoid estejam prontos antes de começar a farmar.
-if Character and Humanoid then
-    FarmLoop()
-else
-    warn("🚨 [JackOLantern Farm Bot] Falha ao encontrar o Personagem ou Humanoid! Aguardando...")
-    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    Humanoid = Character:WaitForChild("Humanoid")
-    task.wait(1)
-    FarmLoop() -- Tenta novamente após a espera
-end
-
+end)

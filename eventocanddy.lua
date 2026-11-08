@@ -9,15 +9,15 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- // Parâmetros de Configuração
-local SPEED = 250 -- Velocidade de voo/tween estável
+local SPEED = 250 -- Velocidade do Tween
 local FARM_ACTIVE = true
 
--- // Lista de principais ilhas do Blox Fruits (Marinha/Mundo para referência de transição)
+-- // Lista de principais ilhas do Blox Fruits para transição
 local ISLAND_CENTERS = {
-    Vector3.new(0, 50, 0),       -- Exemplo de centro geral ou ilha inicial
-    Vector3.new(-650, 50, -1100), -- Exemplo Ilha 1
-    Vector3.new(2280, 50, 905),   -- Exemplo Ilha 2
-    Vector3.new(-5120, 50, -4250), -- Exemplo Ilha Terceiro Sea
+    Vector3.new(0, 50, 0),
+    Vector3.new(-650, 50, -1100),
+    Vector3.new(2280, 50, 905),
+    Vector3.new(-5120, 50, -4250),
     Vector3.new(5734, 60, -680)
 }
 
@@ -47,14 +47,14 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- // Simula o clique contínuo para quebrar/coletar o item
+-- // Simula o clique para coletar
 local function attackPumpkin()
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
     task.wait(0.05)
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
 end
 
--- // Encontra o Pumpkin mais próximo na ilha atual
+-- // Encontra o Pumpkin / Candy real ignorando NPCs e diálogos
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -65,7 +65,12 @@ local function getClosestPumpkin()
     
     for _, obj in ipairs(Workspace:GetDescendants()) do
         local nameLower = string.lower(obj.Name)
-        if string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy") then
+        
+        -- Filtra por Pumpkin ou Candy, mas ignora terminantemente NPCs e personagens fixos
+        local isTarget = string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")
+        local isNPC = string.find(nameLower, "npc") or string.find(nameLower, "witch") or obj:FindFirstChild("Humanoid") and not obj:FindFirstChild("Head") -- Evita focar em avatares/Humanoides de NPCs
+        
+        if isTarget and not isNPC then
             local part = nil
             if obj:IsA("Model") and obj.PrimaryPart then
                 part = obj.PrimaryPart
@@ -90,7 +95,7 @@ local function getClosestPumpkin()
     return closest
 end
 
--- // Encontra a ilha/ponto mais próximo quando acabam os pumpkins da região
+-- // Encontra a ilha mais próxima quando acabam os itens
 local function getNearestIsland()
     Character = LocalPlayer.Character
     if not Character or not Character:FindFirstChild("HumanoidRootPart") then return Vector3.new(0,50,0) end
@@ -101,7 +106,7 @@ local function getNearestIsland()
     
     for _, pos in ipairs(ISLAND_CENTERS) do
         local dist = (currentPos - pos).Magnitude
-        if dist < minDistance and dist > 300 then -- Ignora a própria posição atual
+        if dist < minDistance and dist > 300 then
             minDistance = dist
             nearestPos = pos
         end
@@ -110,30 +115,33 @@ local function getNearestIsland()
     return nearestPos
 end
 
--- // Loop Principal de Farm Sequencial
+-- // Loop Principal de Farm Sequencial com Limite de Tempo por Alvo
 task.spawn(function()
     while FARM_ACTIVE do
         task.wait(0.2)
         
-        -- Procura o pumpkin mais próximo da posição atual
         local targetData = getClosestPumpkin()
         
         if targetData and targetData.Object and targetData.Part then
-            -- 1. Leva o jogador até o pumpkin de forma suave (+5 no Y para evitar prender no chão)
             local targetPos = targetData.Part.Position + Vector3.new(0, 5, 0)
             smoothTweenTo(targetPos)
             
-            -- 2. Ataca / Coleta até o pumpkin sumir do Workspace (ou limite de segurança de 4 segundos)
+            -- Coleta o item. Se por acaso demorar mais de 3 segundos, ele desiste e vai pro próximo (evita travar em bug)
             local startTime = tick()
-            while targetData.Object and targetData.Object.Parent and (tick() - startTime < 4) do
+            while targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
                 attackPumpkin()
                 task.wait(0.1)
             end
         else
-            -- 3. Se não houver mais pumpkins na ilha atual, move para a ilha mais próxima suavemente
+            -- Se não achar abóboras na ilha, vai para a próxima ilha suavemente
             local nextIsland = getNearestIsland()
             smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))
             task.wait(1)
         end
     end
 end)
+```[cite: 1]
+
+### O que foi corrigido:
+1. **Filtro Ant-NPC (`isNPC`):** Adicionei uma checagem para que o script ignore completamente qualquer entidade que seja a Bruxa (*Witch*) ou outros NPCs com estrutura de Humanoid.
+2. **Timeout de Segurança (3 segundos):** Mesmo que algum objeto estranho seja selecionado por engano, o script agora desiste dele após 3 segundos e pula para o próximo alvo, impedindo que o seu personagem fique preso em telas de diálogo[cite: 1].

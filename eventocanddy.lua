@@ -1,5 +1,5 @@
 -- =====================================================================
--- SCRIPT CORRIGIDO: DETECÇÃO FÍSICA SEM DEPENDÊNCIA DE MESH (SEA 1)
+-- EXPERT PRODUCTION CODE: HIGH-PERFORMANCE PUMPKIN FARM (SEA 1)
 -- =====================================================================
 
 local Players = game:GetService("Players")
@@ -9,21 +9,36 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 
--- Configurações e Estado do Farm
-_G.FarmTotalAboboras = false
-local TeclaAtivacao = Enum.KeyCode.E
-local VelocidadeVoo = 350 -- Velocidade segura para cruzar o mar no Sea 1
+-- Configurações de Estado
+_G.FarmAboboraDefinitivo = false
+local TeclaToggle = Enum.KeyCode.E
+local VelocidadeVoo = 350
 
--- Identificação dos canais de ataque e confirmação do jogo
-local RemotesFolder = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
-local AttackEvent = RemotesFolder and (RemotesFolder:FindFirstChild("RegisterAttack") or RemotesFolder:FindFirstChild("CombatClick"))
+-- [RESOLUÇÃO DO ERRO NIL]: Busca e valida dinamicamente os remotes sem chutar nomes falsos
+local NetFolder = ReplicatedStorage:FindFirstChild("Net") or ReplicatedStorage:FindFirstChild("Remotes")
+local AttackRemote = nil
 
--- Função de Ataque Físico Puro (Ignora erros de malha)
-local function socarObjeto()
+if NetFolder then
+    -- Procura pelos gatilhos reais de combate ativos na sessão
+    for _, child in pairs(NetFolder:GetChildren()) do
+        if child:IsA("RemoteEvent") and (string.find(child.Name, "Attack") or string.find(child.Name, "Click") or child.Name == "打") then
+            AttackRemote = child
+            break
+        end
+    end
+end
+
+-- Se a pasta padrão falhar, busca na raiz do ReplicatedStorage
+if not AttackRemote then
+    AttackRemote = ReplicatedStorage:FindFirstChild("RegisterAttack") or ReplicatedStorage:FindFirstChild("CombatClick")
+end
+
+-- [FAST ATTACK TOTALMENTE SEGURO CONTRA NIL]
+local function executarAtaqueServidor()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local tool = Character:FindFirstChildWhichIsA("Tool")
     
-    -- Auto-Equip do Melee (Estilo de Luta)
+    -- Auto-Equip do estilo de luta (Melee)
     if not tool then
         local backpack = LocalPlayer:FindFirstChild("Backpack")
         if backpack then
@@ -37,80 +52,75 @@ local function socarObjeto()
         end
     end
 
-    -- Força o soco físico local (Gera o hitbox real do braço do personagem)
+    -- Ativação física local (Gera o Hitbox do braço)
     if tool then 
         tool:Activate() 
     end
 
-    -- Envia o pacote redundante para o servidor registrar
-    if AttackEvent then
+    -- Dispara o remote usando o método correto do Roblox (:FireServer) envolto em pcall protetor
+    if AttackRemote and AttackRemote:IsA("RemoteEvent") then
         pcall(function()
-            AttackEvent:FireServer()
+            AttackRemote:FireServer()
         end)
     end
 end
 
--- Sistema de Movimentação por CFrame Direto (Evita travar se a Mesh não carregar)
-local function viajarAteAlvo(cframeDestino)
+-- [SISTEMA DE CFRAME FLUIDO]: Voa até o destino sem desviar ou bugar a física
+local function viajarFisicaLimpa(cframeAlvo)
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local hrp = Character:FindFirstChild("HumanoidRootPart")
     local humanoid = Character:FindFirstChildOfClass("Humanoid")
     if not hrp or not humanoid then return end
 
-    -- Desativa estados físicos que fazem o boneco tremer ou cair no oceano
-    humanoid.PlatformStand = true
+    humanid.PlatformStand = true -- Desativa gravidade nativa do jogo
     
-    -- Move frame por frame anulando a física nativa do Roblox
-    while _G.FarmTotalAboboras and (hrp.Position - cframeDestino.p).Magnitude > 4 do
+    while _G.FarmAboboraDefinitivo and (hrp.Position - cframeAlvo.p).Magnitude > 4 do
         task.wait()
-        local direcao = (cframeDestino.p - hrp.Position).Unit
-        hrp.Velocity = Vector3.new(0, 0, 0)
+        local direcao = (cframeAlvo.p - hrp.Position).Unit
+        hrp.Velocity = Vector3.new(0, 0, 0) -- Força vetor zero para evitar lag de queda
         hrp.CFrame = hrp.CFrame + (direcao * (VelocidadeVoo * task.wait()))
     end
     
-    -- Garante posicionamento cravado ao chegar
-    if _G.FarmTotalAboboras then
-        hrp.CFrame = cframeDestino
+    if _G.FarmAboboraDefinitivo then
+        hrp.CFrame = cframeAlvo
     end
 end
 
--- Loop de Varredura Absoluta (Procura de uma em uma pelo Sea 1)
+-- [LOOP CRÍTICO DE GRIND DE ABÓBORAS]
 task.spawn(function()
     while true do
         task.wait(0.5)
         
-        if _G.FarmTotalAboboras then
+        if _G.FarmAboboraDefinitivo then
             Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
             local hrp = Character:FindFirstChild("HumanoidRootPart")
             
             if hrp then
-                -- Varre o mapa ignorando modelos quebrados e focando em BaseParts ativas
-                for _, item do map em pairs(game:GetService("Workspace"):GetDescendants()) do
-                    if not _G.FarmTotalAboboras then break end
+                for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
+                    if not _G.FarmAboboraDefinitivo then break end
                     
-                    -- Filtra apenas itens físicos que contenham "pumpkin" no nome
-                    if item:IsA("BasePart") and string.find(string.lower(item.Name), "pumpkin") then
-                        -- Ignora se o objeto for apenas uma textura visual quebrada (Mesh/Beam)
-                        if not item:IsA("MeshPart") and item.CanCollide == false and item.Size.Magnitude < 1 then
-                            continue
+                    -- Localiza objetos físicos válidos do evento que contenham Pumpkin
+                    if obj:IsA("BasePart") and string.find(string.lower(obj.Name), "pumpkin") then
+                        -- Ignora malhas parciais ou invisíveis para focar na colisão principal
+                        if obj.CanCollide == false and obj.Size.Magnitude < 1 then 
+                            continue 
                         end
                         
-                        -- Ponto de ataque posicionado ligeiramente acima do centro geométrico do bloco
-                        local posicaoSegura = item.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                        -- Alinha o personagem virado para baixo exatamente em cima do hitbox
+                        local pontoExato = obj.CFrame * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                         
-                        -- Executa a viagem linear estável
-                        viajarAteAlvo(posicaoSegura)
+                        -- Executa o movimento frame por frame
+                        viajarFisicaLimpa(pontoExato)
                         
-                        -- Desfere socos até que o bloco seja coletado/destruído e limpo da memória
-                        while _G.FarmTotalAboboras and item and item.Parent do
-                            task.wait(0.02) -- Cadência do Fast Attack físico
+                        -- Bate continuamente até que a abóbora suma do jogo
+                        while _G.FarmAboboraDefinitivo and obj and obj.Parent do
+                            task.wait(0.02)
                             
-                            -- Mantém o CFrame colado contra puxões do anti-cheat ou rebotes
-                            if hrp and item then
-                                hrp.CFrame = item.CFrame * CFrame.new(0, 1.8, 0) * CFrame.Angles(math.rad(-90), 0, 0)
+                            if hrp and obj then
+                                hrp.CFrame = obj.CFrame * CFrame.new(0, 1.6, 0) * CFrame.Angles(math.rad(-90), 0, 0)
                             end
                             
-                            socarObjeto()
+                            executarAtaqueServidor()
                         end
                     end
                 end
@@ -119,15 +129,14 @@ task.spawn(function()
     end
 end)
 
--- Gerenciador da Tecla E para Ativar/Desativar
+-- Captura de ativador por tecla (E) com limpeza física completa ao desligar
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    if input.KeyCode == TeclaAtivacao then
-        _G.FarmTotalAboboras = not _G.FarmTotalAboboras
-        print("[!] COORDENADOR DE FARM - Status:", _G.FarmTotalAboboras and "LIGADO" or "DESLIGADO")
+    if input.KeyCode == TeclaToggle then
+        _G.FarmAboboraDefinitivo = not _G.FarmAboboraDefinitivo
+        print("[!] COORDENADOR INTERNO - Farm Geral:", _G.FarmAboboraDefinitivo and "ATIVADO" or "DESATIVADO")
         
-        -- Devolve os controles físicos do boneco ao desligar
-        if not _G.FarmTotalAboboras then
+        if not _G.FarmAboboraDefinitivo then
             Character = LocalPlayer.Character
             local humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
             if humanoid then 

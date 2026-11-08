@@ -2,7 +2,6 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
@@ -13,8 +12,7 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local SPEED = 250
 local FARM_ACTIVE = false
 
--- // Coordenadas aproximadas da Witch (Praça principal) para banir qualquer alvo muito perto dela
-local WITCH_ZONE = Vector3.new(-650, 70, -130) -- Ajuste se necessário, ou ignoramos por nome exato do modelo pai
+-- // Lista de principais ilhas do Blox Fruits para transição
 local ISLAND_CENTERS = {
     Vector3.new(0, 50, 0),
     Vector3.new(-650, 50, -1100),
@@ -113,12 +111,6 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
-local function attackPumpkin()
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
-    task.wait(0.05)
-    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
-end
-
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -130,10 +122,8 @@ local function getClosestPumpkin()
     for _, obj in ipairs(Workspace:GetDescendants()) do
         local nameLower = string.lower(obj.Name)
         
-        -- Verifica se é o item correto
         local isTarget = string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")
         
-        -- Procura se o nome da pasta pai ou do modelo contém termos da Witch / Loja / NPC
         local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
         local grandParentName = obj.Parent and obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
         
@@ -154,10 +144,6 @@ local function getClosestPumpkin()
             end
             
             if part then
-                -- Ignora se estiver na mesma posição exata do caldeirão/mesa da Witch (raio menor que 15 studs)
-                -- (Isso impede que abóboras decorativas de enfeite na mesa da bruxa sejam selecionadas)
-                local distFromWitchArea = (part.Position - Vector3.new(-650, 70, -130)).Magnitude -- Exemplo de centro da praça
-                
                 local dist = (currentPos - part.Position).Magnitude
                 if dist < shortestDist then
                     shortestDist = dist
@@ -201,11 +187,9 @@ task.spawn(function()
                 local targetPos = targetData.Part.Position + Vector3.new(0, 5, 0)
                 smoothTweenTo(targetPos)
                 
-                local startTime = tick()
-                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
-                    attackPumpkin()
-                    task.wait(0.1)
-                end
+                -- Como os itens do evento de Halloween no Blox Fruits somem automaticamente ao encostar/aproximar, 
+                -- o personagem apenas chega até eles, garantindo coleta limpa sem erros de input.
+                task.wait(0.5)
             else
                 local nextIsland = getNearestIsland()
                 smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))
@@ -214,7 +198,3 @@ task.spawn(function()
         end
     end
 end)
-```[cite: 1, 2]
-
-### O que foi ajustado agora:
-* **Filtro de Pasta Pai (`parentName` e `grandParentName`):** O script agora olha quem é o "dono" (pasta ou modelo pai) do objeto. Se a abóbora estiver dentro da pasta da *Witch*, do *Cauldron* ou de um *Shop*, ela é descartada na hora, impedindo que o script confunda a decoração fixa da bruxa com as abóbora de farm reais espalhadas pelo mapa[cite: 1, 2].

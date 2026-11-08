@@ -1,7 +1,8 @@
--- Serviços do Roblox
+-- Serviços Básicos do Roblox
 local UserInputService = game:GetService("UserInputService")
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local VirtualUser = game:GetService("VirtualUser")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -9,71 +10,41 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 -- Configurações
 local FarmAboboraAtivo = false
 local TeclaAtivacao = Enum.KeyCode.E
-local VelocidadeTween = 350 -- Velocidade segura igual farm de baús
+local VelocidadeTween = 250 -- Velocidade controlada para o Tween terminar sem erros
 
--- Função para anular a gravidade e mover sem bugar ou prender no cenário
-local function teleportarPara(posicaoAlvo)
-    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local humanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
-    local humanoid = Character:FindFirstChildOfClass("Humanoid")
-    if not humanoidRootPart or not humanoid then return end
-
-    -- Desativa a física de queda temporariamente para não bugar o Tween
-    local originalPlatform = humanoid.PlatformStand
-    humanoid.PlatformStand = true
-    
-    local antigoAnchored = humanoidRootPart.Anchored
-    
-    -- Calcula tempo baseado na distância
-    local distancia = (humanoidRootPart.Position - posicaoAlvo.p).Magnitude
-    local tempo = distancia / VelocidadeTween
-    
-    -- Executa o movimento suave até o item
-    local tweenInfo = TweenInfo.new(tempo, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = posicaoAlvo})
-    tween:Play()
-    tween.Completed:Wait()
-    
-    -- Restaura o estado normal do personagem ao chegar
-    humanoid.PlatformStand = originalPlatform
+-- Função de clique simulado na tela (Auto-Clicker direto que funciona com ferramenta)
+local function clicarNaTela()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton1(Vector2.new(0, 0))
 end
 
--- Função de Ataque com Hitbox Físico Real (Evita o bug de não dar dano)
-local function baterNaAbobora()
+-- Função para equipar o estilo de luta automaticamente
+local function equiparEstilo()
     Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-    local tool = Character:FindFirstChildWhichIsA("Tool")
-    
-    -- Auto-Equip garantido do Estilo de Luta (Melee)
-    if not tool then
+    if not Character:FindFirstChildWhichIsA("Tool") then
         local backpack = LocalPlayer:FindFirstChild("Backpack")
         if backpack then
             for _, item in pairs(backpack:GetChildren()) do
                 if item:IsA("Tool") and (item.ToolTip == "Melee" or item.Name == "Combat" or item.Name == "Combate") then
                     item.Parent = Character
-                    tool = item
                     break
                 end
             end
         end
     end
-    
-    -- Força a ativação física do soco para criar o hitbox de dano no bloco
-    if tool then
-        tool:Activate()
-    end
 end
 
--- Loop Principal do Farm de Abóboras do Chão
+-- Loop Principal do Farm
 task.spawn(function()
     while true do
-        task.wait(0.2)
+        task.wait(0.5)
         
         if FarmAboboraAtivo then
             Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
             local humanoidRootPart = Character:FindFirstChild("HumanoidRootPart")
             
             if humanoidRootPart then
-                -- Varre o Workspace procurando as abóboras
+                -- Busca as abóboras no Workspace
                 for _, obj in pairs(game:GetService("Workspace"):GetDescendants()) do
                     if not FarmAboboraAtivo then break end
                     
@@ -81,23 +52,31 @@ task.spawn(function()
                         local rootPart = obj:FindFirstChildWhichIsA("BasePart")
                         
                         if rootPart and rootPart.Parent then
-                            -- Define a posição grudada na abóbora
-                            local alvo = rootPart.CFrame * CFrame.new(0, 1.2, 0)
+                            -- 1. Calcula e executa o Tween até o destino
+                            local alvoCFrame = rootPart.CFrame * CFrame.new(0, 2, 0)
+                            local distancia = (humanoidRootPart.Position - alvoCFrame.p).Magnitude
+                            local tempo = distancia / VelocidadeTween
                             
-                            -- Move até ela sem bugar no ar
-                            teleportarPara(alvo)
+                            local tween = TweenService:Create(humanoidRootPart, TweenInfo.new(tempo, Enum.EasingStyle.Linear), {CFrame = alvoCFrame})
+                            tween:Play()
+                            tween.Completed:Wait() -- Espera o teletransporte CHEGAR totalmente
                             
-                            -- Ataca continuamente enquanto o objeto físico existir no mapa
+                            -- 2. Chegou? Ancora o personagem para a física do jogo não puxar ele para baixo
+                            humanoidRootPart.Anchored = true
+                            
+                            -- 3. Ataca continuamente até a abóbora sumir do jogo
                             while FarmAboboraAtivo and obj and obj.Parent and rootPart and rootPart.Parent do
-                                task.wait(0.05) -- Velocidade rápida de socos
+                                task.wait(0.05) -- Delay dos socos
                                 
-                                -- Trava a posição em cima do item enquanto bate para não ser empurrado
-                                if humanoidRootPart and rootPart then
-                                    humanoidRootPart.CFrame = rootPart.CFrame * CFrame.new(0, 1.2, 0)
-                                end
+                                -- Mantém o CFrame cravado na abóbora
+                                humanoidRootPart.CFrame = rootPart.CFrame * CFrame.new(0, 2, 0)
                                 
-                                baterNaAbobora()
+                                equiparEstilo()
+                                clicarNaTela()
                             end
+                            
+                            -- 4. A abóbora sumiu? Desancora para poder ir para a próxima
+                            humanoidRootPart.Anchored = false
                         end
                     end
                 end
@@ -109,16 +88,14 @@ end)
 -- Ativador por tecla (E)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
-    
     if input.KeyCode == TeclaAtivacao then
         FarmAboboraAtivo = not FarmAboboraAtivo
-        if FarmAboboraAtivo then
-            print("=== FARM ATIVADO ===")
-        else
-            print("=== FARM DESATIVADO ===")
-            -- Garante que se o farm desligar, o personagem volta a andar normal
-            local humanoid = Character:FindFirstChildOfClass("Humanoid")
-            if humanoid then humanoid.PlatformStand = false end
+        print("Farm de Abóboras:", FarmAboboraAtivo and "ATIVADO" or "DESATIVADO")
+        
+        -- Garante que se desligar o farm, o personagem não fique travado (ancorado)
+        if not FarmAboboraAtivo then
+            local hrp = Character:FindFirstChild("HumanoidRootPart")
+            if hrp then hrp.Anchored = false end
         end
     end
 end)

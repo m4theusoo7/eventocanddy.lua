@@ -1,46 +1,50 @@
---[[
-    SCRIPT DE AUTOMAÇÃO PARA FARMING DA ABÓBORA NO BLOX FRUITS
-    Instruções: Coloque este script em um LocalScript dentro de StarterPlayerScripts.
-]]
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local rootpart = character:FindFirstChild("HumanoidRootPart")
 
--- 1. Variáveis Globais (Configurações)
-local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local Player = Players.LocalPlayer -- Pega o jogador que está rodando o script
+-- Configurações
+local speed = 25 -- Velocidade de movimento (quanto maior, mais rápido)
+local pickupDistance = 3.5 -- Distância para pegar o item (em studs)
+local checkInterval = 0.1 -- Tempo entre verificações (quanto menor, mais preciso)
 
--- Configuração do tempo de espera entre os cliques (em segundos). 
--- Um valor menor significa farm mais rápido, mas pode sobrecarregar o jogo.
-local TEMPO_DE_ESPERA = 0.5 
-
--- Nome exato da parte/objeto que representa a abóbora no mapa.
--- Se houver várias abóboras, você precisará ajustar este nome ou usar um loop de busca!
-local NOME_DA_ABOBORA = "Pumpkin" -- Assumindo que o objeto se chama "Pumpkin"
-
-print("🤖 Script de Farm da Abóbora Iniciado!")
-
--- 2. Função Principal (O Loop de Farming)
-local function farmarAbobora()
-    while true do
-        -- Tenta encontrar a abóbora no ambiente (Workspace)
-        local pumpkinPart = Workspace:FindFirstChild(NOME_DA_ABOBORA)
-
-        if pumpkinPart then
-            print("✅ Abóbora encontrada! Iniciando clique...")
+-- Função para encontrar itens no chão
+while true do
+    wait(checkInterval)
+    
+    local targetItem = nil
+    
+    -- Procura por partes com PrimaryPartCFrame (padrão de itens) ou nomes comuns de itens/eventos
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") then
+            -- Verifica se é um item genérico ou específico (como a abóboga)
+            local isItem = part.PrimaryPartCFrame or 
+                           (part.Name == "Item" or part.Name == "Pumpkin" or part.Name == "JackO_Lantern" or part.Name:find("Item"))
             
-            -- 3. Ação de Destruição/Coleta (O Clique!)
-            -- O método :Click() simula o clique do mouse no objeto, acionando a mecânica do jogo.
-            pumpkinPart:Click() 
-
-            print("✨ Abóbora clicada com sucesso! Aguardando...")
-        else
-            warn("❌ Abóbora não encontrada! Verifique se o nome está correto ou se ela sumiu.")
+            if isItem then
+                -- Verifica se o item está perto do jogador
+                local distance = rootpart.Position:Distance(part.Position)
+                
+                if distance <= pickupDistance then
+                    targetItem = part
+                elseif distance < 15 and distance > pickupDistance then
+                    -- Se estiver dentro da área de busca, move-se para ele
+                    local direction = (part.CFrame.p - rootpart.CFrame.p).Unit * speed
+                    rootpart.CFrame = rootpart.CFrame + direction
+                    
+                    if distance <= pickupDistance then
+                        targetItem = part
+                    end
+                end
+            end
         end
-
-        -- 4. Espera (O Delay)
-        -- O script pausa por TEMPO_DE_ESPERA antes de procurar e clicar novamente.
-        wait(TEMPO_DE_ESPERA)
+    end
+    
+    -- Se encontrou o item, tenta pegar
+    if targetItem and targetItem.PrimaryPartCFrame then
+        targetItem:Pickup()
+    elseif targetItem and not targetItem.PrimaryPartCFrame then
+         -- Fallback para itens mais simples
+         local pickupFunc = targetItem.Parent:FindFirstChild("PrimaryPartCFrame") or function(p) return p:Pickup end
+         if pickupFunc then pickupFunc(targetItem) end
     end
 end
-
--- Inicia a função principal para que o farming comece imediatamente!
-farmarAbobora()

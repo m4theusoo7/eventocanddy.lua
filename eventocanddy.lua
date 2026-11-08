@@ -4,8 +4,8 @@ local rootpart = character:FindFirstChild("HumanoidRootPart")
 local humanoid = character:FindFirstChild("Humanoid")
 
 -- Configurações
-local speed = 15 -- Velocidade (ajuste se for muito rápido)
-local attackRange = 7 -- Distância para atacar
+local speed = 15 -- Velocidade de movimento (ajuste se for muito rápido)
+local attackRange = 7 -- Distância para atacar/interagir
 local pumpkinName = "Pumpkin" -- Nome padrão, mas o script procura por qualquer coisa com esse nome
 
 print("🎃 Script de Abóbora Iniciado...")

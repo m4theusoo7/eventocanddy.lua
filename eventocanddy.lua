@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -11,6 +12,9 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- // Parâmetros de Configuração
 local SPEED = 250
 local FARM_ACTIVE = false
+
+-- // Remote oficial do Blox Fruits para interações/ataques no mundo
+local CommF = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_")
 
 -- // Lista de principais ilhas do Blox Fruits para transição
 local ISLAND_CENTERS = {
@@ -84,7 +88,7 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 -- // ==========================================
--- // FUNÇÕES DE FARM E COLETA DIRETA
+-- // FUNÇÕES DE FARM E ATAQUE
 -- // ==========================================
 
 local function bypassCollisions()
@@ -111,6 +115,25 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
+-- Função que ativa a ferramenta e força o ataque/dano no alvo
+local function causeDamage(targetPart)
+    pcall(function()
+        Character = LocalPlayer.Character
+        if Character then
+            local tool = Character:FindFirstChildOfClass("Tool")
+            if tool then
+                tool:Activate()
+            end
+            -- Força o envio de dano/clique para o servidor na posição do item
+            if targetPart then
+                pcall(function()
+                    CommF:InvokeServer("AddPoint", targetPart.Position)
+                end)
+            end
+        end
+    end)
+end
+
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -122,10 +145,8 @@ local function getClosestPumpkin()
     for _, obj in ipairs(Workspace:GetDescendants()) do
         local nameLower = string.lower(obj.Name)
         
-        -- Procura por abóboras e doces do evento
         local isTarget = string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")
         
-        -- Filtra estruturas fixas, portas e paredes para evitar travamentos
         local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
         local grandParentName = obj.Parent and obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
         
@@ -148,7 +169,6 @@ local function getClosestPumpkin()
             end
             
             if part then
-                -- Garante que o objeto é pequeno (item coletável)
                 if part.Size.Magnitude < 15 then
                     local dist = (currentPos - part.Position).Magnitude
                     if dist < shortestDist then
@@ -191,17 +211,16 @@ task.spawn(function()
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part then
-                -- Vai exatamente para a posição da abóbora
-                local targetPos = targetData.Part.Position + Vector3.new(0, 2, 0)
+                local targetPos = targetData.Part.Position + Vector3.new(0, 3, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Aguarda o item ser coletado e sumir do workspace (com limite de segurança de 2 segundos)
+                -- Causa dano contínuo até o objeto sumir do Workspace
                 local startTime = tick()
-                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 2) do
-                    task.wait(0.1)
+                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
+                    causeDamage(targetData.Part)
+                    task.wait(0.15)
                 end
             else
-                -- Se não houver mais itens na ilha atual, vai para a próxima ilha
                 local nextIsland = getNearestIsland()
                 smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))
                 task.wait(1)

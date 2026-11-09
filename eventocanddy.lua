@@ -4,6 +4,7 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -113,15 +114,24 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- Nova função de ataque que força o uso da ferramenta equipada na mão
-local function performAttack()
+-- ATAQUE CORRIGIDO: Dispara o RemoteEvent real do combate ou invoca o clique via engine interna do jogo
+local function performAttackNet()
     local char = LocalPlayer.Character
     if not char then return end
     
-    local equippedTool = char:FindFirstChildOfClass("Tool")
-    if equippedTool then
-        equippedTool:Activate() -- Força a ativação do soco/ataque diretamente no item
+    -- Método 1: Dispara usando o Remote de dano padrão do Blox Fruits para Melee/Espadas
+    local net = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Validator")
+    if net then
+        net:FireServer(unpack({[1] = "Melee"}))
     end
+    
+    -- Método 2: Força a execução por trás da ferramenta equipada usando os módulos internos expostos do combat framework
+    pcall(function()
+        local combatModule = require(LocalPlayer.PlayerScripts.CombatFramework)
+        if combatModule and combatModule.activeController then
+            combatModule.activeController.attack()
+        end
+    end)
 end
 
 local function getClosestPumpkin()
@@ -193,14 +203,19 @@ task.spawn(function()
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part and targetData.Object.Parent then
-                -- Teleporta ligeiramente ao lado da abóbora para o soco alcançar perfeitamente
-                local targetPos = targetData.Part.Position + Vector3.new(0, -0.5, 1.5)
+                -- Fica um pouco acima para garantir o acerto do hitbox sem dar glitch de colisão
+                local targetPos = targetData.Part.Position + Vector3.new(0, 2.5, 0)
                 smoothTweenTo(targetPos)
                 
                 local startTime = tick()
                 while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 4) do
-                    performAttack() -- Dispara o soco diretamente
-                    task.wait(0.07) -- Velocidade rápida e segura de cliques
+                    local char = LocalPlayer.Character
+                    if char and char:FindFirstChild("HumanoidRootPart") then
+                        char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
+                    end
+                    
+                    performAttackNet() -- Dispara o ataque real mapeado do jogo
+                    task.wait(0.1)
                 end
             else
                 local nextIsland = getNearestIsland()

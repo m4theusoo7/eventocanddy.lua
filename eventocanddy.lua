@@ -4,7 +4,7 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser") -- Serviço nativo do Roblox para simular cliques
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -114,24 +114,9 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- ATAQUE CORRIGIDO: Dispara o RemoteEvent real do combate ou invoca o clique via engine interna do jogo
-local function performAttackNet()
-    local char = LocalPlayer.Character
-    if not char then return end
-    
-    -- Método 1: Dispara usando o Remote de dano padrão do Blox Fruits para Melee/Espadas
-    local net = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Validator")
-    if net then
-        net:FireServer(unpack({[1] = "Melee"}))
-    end
-    
-    -- Método 2: Força a execução por trás da ferramenta equipada usando os módulos internos expostos do combat framework
-    pcall(function()
-        local combatModule = require(LocalPlayer.PlayerScripts.CombatFramework)
-        if combatModule and combatModule.activeController then
-            combatModule.activeController.attack()
-        end
-    end)
+-- FUNÇÃO CORRIGIDA: Dispara o clique nativo do mouse na tela de forma limpa e direta
+local function clickAttack()
+    VirtualUser:ClickButton1(Vector2.new(0, 0))
 end
 
 local function getClosestPumpkin()
@@ -203,8 +188,8 @@ task.spawn(function()
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part and targetData.Object.Parent then
-                -- Fica um pouco acima para garantir o acerto do hitbox sem dar glitch de colisão
-                local targetPos = targetData.Part.Position + Vector3.new(0, 2.5, 0)
+                -- Posiciona você a uma distância segura da abóbora para o hitbox não bugar
+                local targetPos = targetData.Part.Position + Vector3.new(0, 2, 0)
                 smoothTweenTo(targetPos)
                 
                 local startTime = tick()
@@ -214,8 +199,8 @@ task.spawn(function()
                         char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
                     end
                     
-                    performAttackNet() -- Dispara o ataque real mapeado do jogo
-                    task.wait(0.1)
+                    clickAttack() -- Executa o soco repetidamente
+                    task.wait(0.05) -- Velocidade rápida de cliques
                 end
             else
                 local nextIsland = getNearestIsland()

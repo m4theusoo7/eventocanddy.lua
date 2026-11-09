@@ -3,7 +3,6 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -85,7 +84,7 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 -- // ==========================================
--- // FUNÇÕES DE FARM E ATAQUE
+-- // FUNÇÕES DE FARM E COLETA DIRETA
 -- // ==========================================
 
 local function bypassCollisions()
@@ -112,19 +111,6 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- Função para ativar o ataque da ferramenta/estilo de luta equipado
-local function triggerAttack()
-    pcall(function()
-        Character = LocalPlayer.Character
-        if Character then
-            local tool = Character:FindFirstChildOfClass("Tool")
-            if tool then
-                tool:Activate()
-            end
-        end
-    end)
-end
-
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -136,8 +122,10 @@ local function getClosestPumpkin()
     for _, obj in ipairs(Workspace:GetDescendants()) do
         local nameLower = string.lower(obj.Name)
         
+        -- Procura por abóboras e doces do evento
         local isTarget = string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")
         
+        -- Filtra estruturas fixas, portas e paredes para evitar travamentos
         local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
         local grandParentName = obj.Parent and obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
         
@@ -160,7 +148,8 @@ local function getClosestPumpkin()
             end
             
             if part then
-                if part.Size.Magnitude < 25 then
+                -- Garante que o objeto é pequeno (item coletável)
+                if part.Size.Magnitude < 15 then
                     local dist = (currentPos - part.Position).Magnitude
                     if dist < shortestDist then
                         shortestDist = dist
@@ -202,16 +191,17 @@ task.spawn(function()
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part then
-                local targetPos = targetData.Part.Position + Vector3.new(0, 5, 0)
+                -- Vai exatamente para a posição da abóbora
+                local targetPos = targetData.Part.Position + Vector3.new(0, 2, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Ataca ativando a ferramenta equipada até o item sumir ou dar 3 segundos
+                -- Aguarda o item ser coletado e sumir do workspace (com limite de segurança de 2 segundos)
                 local startTime = tick()
-                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
-                    triggerAttack()
-                    task.wait(0.15)
+                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 2) do
+                    task.wait(0.1)
                 end
             else
+                -- Se não houver mais itens na ilha atual, vai para a próxima ilha
                 local nextIsland = getNearestIsland()
                 smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))
                 task.wait(1)

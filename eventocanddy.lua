@@ -4,7 +4,7 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser") -- Serviço nativo do Roblox
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -114,34 +114,10 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- SOLUÇÃO DEFINITIVA: Intercepta e executa o Framework de Ataque Real do Blox Fruits
-local function executeCombatAttack()
-    -- Método Principal: Invoca o Módulo de Combate Interno do jogo ativo nos scripts locais do seu jogador
-    pcall(function()
-        local playerScripts = LocalPlayer:FindFirstChild("PlayerScripts")
-        if playerScripts then
-            local combatFramework = playerScripts:FindFirstChild("CombatFramework")
-            if combatFramework and combatFramework:IsA("ModuleScript") then
-                local framework = require(combatFramework)
-                if framework and framework.activeController then
-                    -- Força o gatilho da função de ataque da sua arma/estilo de luta equipada
-                    framework.activeController.attack()
-                end
-            end
-        end
-    end)
-
-    -- Método Secundário (Bypass): Envia diretamente os pacotes de rede se o framework local estiver ofuscado
-    pcall(function()
-        local netRemotes = ReplicatedStorage:FindFirstChild("Remotes")
-        if netRemotes then
-            local validator = netRemotes:FindFirstChild("Validator") or netRemotes:FindFirstChild("Click")
-            if validator and validator:IsA("RemoteEvent") then
-                -- Dispara o evento de ataque contornando completamente a tela e simulando dano Melee legítimo
-                validator:FireServer("Melee", 1)
-            end
-        end
-    end)
+-- MÉTODO INFALÍVEL: Captura o controle de input e força o clique físico na tela
+local function forceClick()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton1(Vector2.new(850, 350)) -- Coordenada simulada onde fica o botão de ataque padrão no mobile
 end
 
 local function getClosestPumpkin()
@@ -207,26 +183,25 @@ end
 -- // Loop Principal controlado pelo Botão
 task.spawn(function()
     while true do
-        task.wait(0.05) -- Resposta ultra rápida de verificação
+        task.wait(0.1)
         
         if FARM_ACTIVE then
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part and targetData.Object.Parent then
-                -- Posiciona perfeitamente acima sem colidir na abóbora
+                -- Posiciona o personagem perfeitamente a 2.5 studs acima (sem se enterrar na abóbora)
                 local targetPos = targetData.Part.Position + Vector3.new(0, 2.5, 0)
                 smoothTweenTo(targetPos)
                 
                 local startTime = tick()
                 while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 4) do
-                    -- Trava a posição para evitar empurrões da física
                     local char = LocalPlayer.Character
                     if char and char:FindFirstChild("HumanoidRootPart") then
                         char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
                     end
                     
-                    executeCombatAttack() -- Executa o ataque via backend do jogo
-                    task.wait(0.1) -- Ritmo rápido e otimizado de socos
+                    forceClick() -- Dispara o soco real forçado por hardware simulado
+                    task.wait(0.08)
                 end
             else
                 local nextIsland = getNearestIsland()

@@ -3,7 +3,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
-local VirtualUser = game:GetService("VirtualUser")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -85,7 +85,7 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 -- // ==========================================
--- // FUNÇÕES DE FARM E COLETA
+-- // FUNÇÕES DE FARM E ATAQUE
 -- // ==========================================
 
 local function bypassCollisions()
@@ -112,12 +112,16 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- Função segura para interagir/atacar usando o VirtualUser do Roblox
-local function clickTarget()
+-- Função para ativar o ataque da ferramenta/estilo de luta equipado
+local function triggerAttack()
     pcall(function()
-        VirtualUser:Button1Down(Vector2.new(0,0), workspace.CurrentCamera.ViewportSize)
-        task.wait(0.05)
-        VirtualUser:Button1Up(Vector2.new(0,0), workspace.CurrentCamera.ViewportSize)
+        Character = LocalPlayer.Character
+        if Character then
+            local tool = Character:FindFirstChildOfClass("Tool")
+            if tool then
+                tool:Activate()
+            end
+        end
     end)
 end
 
@@ -137,7 +141,6 @@ local function getClosestPumpkin()
         local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
         local grandParentName = obj.Parent and obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
         
-        -- Ignora portas, paredes e estruturas de casas/lojas
         local isStructureOrDoor = string.find(parentName, "door") or string.find(grandParentName, "door") or
                                   string.find(parentName, "wall") or string.find(grandParentName, "wall") or
                                   string.find(parentName, "house") or string.find(grandParentName, "house") or
@@ -202,10 +205,10 @@ task.spawn(function()
                 local targetPos = targetData.Part.Position + Vector3.new(0, 5, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Ataca / Coleta até a abóbora sumir do mapa ou dar o tempo limite de 3 segundos
+                -- Ataca ativando a ferramenta equipada até o item sumir ou dar 3 segundos
                 local startTime = tick()
                 while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
-                    clickTarget()
+                    triggerAttack()
                     task.wait(0.15)
                 end
             else

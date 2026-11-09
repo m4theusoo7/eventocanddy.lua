@@ -3,10 +3,9 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
-local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
 -- // Parâmetros de Configuração
 local SPEED = 250
@@ -65,7 +64,7 @@ ToggleButton.InputChanged:Connect(function(input)
     end
 end)
 
-game:GetService("UserInputService").InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         ToggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
@@ -88,7 +87,9 @@ end)
 -- // ==========================================
 
 local function bypassCollisions()
-    for _, part in ipairs(Character:GetDescendants()) do
+    local char = LocalPlayer.Character
+    if not char then return end
+    for _, part in ipairs(char:GetDescendants()) do
         if part:IsA("BasePart") then
             part.CanCollide = false
         end
@@ -96,15 +97,16 @@ local function bypassCollisions()
 end
 
 local function smoothTweenTo(targetPosition)
-    Character = LocalPlayer.Character
-    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
-    HumanoidRootPart = Character.HumanoidRootPart
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
     
-    local distance = (HumanoidRootPart.Position - targetPosition).Magnitude
+    local distance = (hrp.Position - targetPosition).Magnitude
     local timeToTravel = distance / SPEED
     
     local tweenInfo = TweenInfo.new(timeToTravel, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(HumanoidRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPosition)})
     
     bypassCollisions()
     tween:Play()
@@ -115,16 +117,17 @@ local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
     
-    Character = LocalPlayer.Character
-    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return nil end
-    local currentPos = Character.HumanoidRootPart.Position
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return nil end
+    local currentPos = hrp.Position
     
-    -- Varre apenas objetos ativos que sejam partes físicas reais no Workspace
+    -- Varre os objetos do Workspace (removido filtro de Anchored pois colecionáveis costumam ser fixos)
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") and not obj.Anchored then
+        if obj:IsA("BasePart") then
             local nameLower = string.lower(obj.Name)
             
-            -- Identifica estritamente itens de evento reais e rejeita qualquer estrutura fixa, NPC ou parede
             if (string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")) then
                 local fullNameLower = string.lower(obj:GetFullName())
                 
@@ -151,9 +154,11 @@ local function getClosestPumpkin()
 end
 
 local function getNearestIsland()
-    Character = LocalPlayer.Character
-    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return Vector3.new(0,50,0) end
-    local currentPos = Character.HumanoidRootPart.Position
+    local char = LocalPlayer.Character
+    if not char then return ISLAND_CENTERS[1] end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return ISLAND_CENTERS[1] end
+    local currentPos = hrp.Position
     
     local nearestPos = ISLAND_CENTERS[1]
     local minDistance = math.huge
@@ -177,16 +182,17 @@ task.spawn(function()
         if FARM_ACTIVE then
             local targetData = getClosestPumpkin()
             
-            if targetData and targetData.Object and targetData.Part then
+            if targetData and targetData.Object and targetData.Part and targetData.Object.Parent then
                 local targetPos = targetData.Part.Position + Vector3.new(0, 2, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Aguarda o item ser coletado (desaparecer da memória do jogo) com timeout de segurança de 2 segundos
+                -- Aguarda o item sumir com verificação segura de Parent
                 local startTime = tick()
                 while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 2) do
                     task.wait(0.05)
                 end
             else
+                -- Se não achar abóboras na ilha atual, viaja para a próxima
                 local nextIsland = getNearestIsland()
                 smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))
                 task.wait(1)

@@ -4,7 +4,6 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser") -- Adicionado para simular cliques de ataque
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -114,6 +113,17 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
+-- Nova função de ataque que força o uso da ferramenta equipada na mão
+local function performAttack()
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local equippedTool = char:FindFirstChildOfClass("Tool")
+    if equippedTool then
+        equippedTool:Activate() -- Força a ativação do soco/ataque diretamente no item
+    end
+end
+
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -174,33 +184,25 @@ local function getNearestIsland()
     return nearestPos
 end
 
--- Função para simular o ataque (clique) na tela de forma otimizada
-local function attack()
-    VirtualUser:Button1Down(Vector2.new(0, 0))
-    VirtualUser:Button1Up(Vector2.new(0, 0))
-end
-
 -- // Loop Principal controlado pelo Botão
 task.spawn(function()
     while true do
-        task.wait(0.1) -- Loop um pouco mais rápido para detecção ágil
+        task.wait(0.1)
         
         if FARM_ACTIVE then
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part and targetData.Object.Parent then
-                -- Teleporta exatamente ao lado/em cima da abóbora para o ataque acertar
-                local targetPos = targetData.Part.Position + Vector3.new(0, 1, 0)
+                -- Teleporta ligeiramente ao lado da abóbora para o soco alcançar perfeitamente
+                local targetPos = targetData.Part.Position + Vector3.new(0, -0.5, 1.5)
                 smoothTweenTo(targetPos)
                 
-                -- Enquanto a abóbora existir e o farm estiver ativo, fica atacando sem parar
                 local startTime = tick()
                 while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 4) do
-                    attack() -- Executa o clique de ataque
-                    task.wait(0.08) -- Velocidade rápida de clique (pode reduzir se quiser mais rápido)
+                    performAttack() -- Dispara o soco diretamente
+                    task.wait(0.07) -- Velocidade rápida e segura de cliques
                 end
             else
-                -- Se não achar abóboras na ilha atual, viaja para a próxima
                 local nextIsland = getNearestIsland()
                 smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))
                 task.wait(1)

@@ -1,213 +1,128 @@
--- // Configurações Iniciais & Serviços
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser") -- Serviço nativo do Roblox
+local RunService = game:GetService("RunService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local Workspace = game:GetService("Workspace")
 
-local LocalPlayer = Players.LocalPlayer
+local player = Players.LocalPlayer
+local tweenSpeed = 250 -- Velocidade de voo (250 é seguro para o anti-cheat)
+local isFarming = true
 
--- // Parâmetros de Configuração
-local SPEED = 250
-local FARM_ACTIVE = false
+-- Função para encontrar e ordenar os Pumpkins do mais perto para o mais longe
+local function getClosestPumpkins()
+    local pumpkins = {}
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return pumpkins end
+    local hrp = char.HumanoidRootPart
 
--- // Lista de principais ilhas do Blox Fruits para transição
-local ISLAND_CENTERS = {
-    Vector3.new(0, 50, 0),
-    Vector3.new(-650, 50, -1100),
-    Vector3.new(2280, 50, 905),
-    Vector3.new(-5120, 50, -4250),
-    Vector3.new(5734, 60, -680)
-}
-
--- // ==========================================
--- // CRIAÇÃO DA INTERFACE (BOTÃO FLUTUANTE)
--- // ==========================================
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "PumpkinFarmGui"
-ScreenGui.Parent = CoreGui
-ScreenGui.ResetOnSpawn = false
-
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "ToggleBtn"
-ToggleButton.Parent = ScreenGui
-ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-ToggleButton.Position = UDim2.new(0.05, 0, 0.2, 0)
-ToggleButton.Size = UDim2.new(0, 55, 0, 55)
-ToggleButton.Font = Enum.Font.SourceSansBold
-ToggleButton.Text = "OFF"
-ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-ToggleButton.TextSize = 14
-
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(1, 0)
-UICorner.Parent = ToggleButton
-
--- Sistema de Arrastar o Botão
-local dragging, dragInput, dragStart, startPos
-ToggleButton.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = ToggleButton.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj.Name == "Pumpkin" then
+            -- Identifica a parte principal do Pumpkin para pegar a posição
+            local targetPart = obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")) or (obj:IsA("BasePart") and obj or nil)
+            
+            if targetPart then
+                local dist = (hrp.Position - targetPart.Position).Magnitude
+                table.insert(pumpkins, {model = obj, part = targetPart, distance = dist})
             end
-        end)
-    end
-end)
-
-ToggleButton.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        ToggleButton.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
-ToggleButton.MouseButton1Click:Connect(function()
-    FARM_ACTIVE = not FARM_ACTIVE
-    if FARM_ACTIVE then
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-        ToggleButton.Text = "ON"
-    else
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-        ToggleButton.Text = "OFF"
-    end
-end)
-
--- // ==========================================
--- // FUNÇÕES DE FARM E BUSCA PRECISA
--- // ==========================================
-
-local function bypassCollisions()
-    local char = LocalPlayer.Character
-    if not char then return end
-    for _, part in ipairs(char:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = false
         end
     end
+
+    -- Ordena a tabela pela distância (menor para maior)
+    table.sort(pumpkins, function(a, b) return a.distance < b.distance end)
+    return pumpkins
 end
 
-local function smoothTweenTo(targetPosition)
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    local distance = (hrp.Position - targetPosition).Magnitude
-    local timeToTravel = distance / SPEED
-    
+-- Sistema de Noclip para atravessar paredes enquanto voa
+local noclipConnection
+local function enableNoclip()
+    if noclipConnection then noclipConnection:Disconnect() end
+    noclipConnection = RunService.Stepped:Connect(function()
+        local char = player.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") and part.CanCollide then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+-- Função de Voo (Tween)
+local function tweenTo(targetCFrame)
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local hrp = char.HumanoidRootPart
+
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    local timeToTravel = distance / tweenSpeed
+
     local tweenInfo = TweenInfo.new(timeToTravel, Enum.EasingStyle.Linear)
-    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(targetPosition)})
+    local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
     
-    bypassCollisions()
     tween:Play()
-    tween.Completed:Wait()
+    return tween
 end
 
--- MÉTODO INFALÍVEL: Captura o controle de input e força o clique físico na tela
-local function forceClick()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton1(Vector2.new(850, 350)) -- Coordenada simulada onde fica o botão de ataque padrão no mobile
+-- Função para atacar e usar skills
+local function attackAndUseSkills()
+    -- Clique normal (M1)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
+    VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
+
+    -- Uso de skills (Z, X, C, V)
+    local skills = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V}
+    for _, key in ipairs(skills) do
+        VirtualInputManager:SendKeyEvent(true, key, false, game)
+        VirtualInputManager:SendKeyEvent(false, key, false, game)
+        task.wait(0.1) -- Pequeno delay para o jogo registrar as skills
+    end
 end
 
-local function getClosestPumpkin()
-    local closest = nil
-    local shortestDist = math.huge
-    
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return nil end
-    local currentPos = hrp.Position
-    
-    for _, obj in ipairs(Workspace:GetDescendants()) do
-        if obj:IsA("BasePart") then
-            local nameLower = string.lower(obj.Name)
-            
-            if (string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")) then
-                local fullNameLower = string.lower(obj:GetFullName())
+-- Loop principal do Farm
+local function startPumpkinFarm()
+    enableNoclip()
+
+    while isFarming do
+        local pumpkins = getClosestPumpkins()
+
+        if #pumpkins == 0 then
+            -- Se não achar nenhum, aguarda 5 segundos antes de procurar de novo
+            task.wait(5)
+            continue
+        end
+
+        for _, targetData in ipairs(pumpkins) do
+            if not isFarming then break end
+
+            local targetModel = targetData.model
+            local targetPart = targetData.part
+
+            -- Fica em loop atacando ESSE pumpkin específico até ele sumir do mapa
+            while targetModel and targetModel.Parent and isFarming do
+                local char = player.Character
+                if not char or not char:FindFirstChild("HumanoidRootPart") then break end
                 
-                local isInvalid = string.find(fullNameLower, "witch") or 
-                                  string.find(fullNameLower, "npc") or 
-                                  string.find(fullNameLower, "shop") or 
-                                  string.find(fullNameLower, "wall") or 
-                                  string.find(fullNameLower, "door") or 
-                                  string.find(fullNameLower, "house") or
-                                  string.find(fullNameLower, "cauldron")
-                
-                if not isInvalid and obj.Size.Magnitude < 10 then
-                    local dist = (currentPos - obj.Position).Magnitude
-                    if dist < shortestDist then
-                        shortestDist = dist
-                        closest = {Object = obj, Part = obj}
-                    end
+                local hrp = char.HumanoidRootPart
+                local distance = (hrp.Position - targetPart.Position).Magnitude
+
+                if distance > 15 then
+                    -- Se estiver longe, voa até ele (fica um pouco acima para não bugar no chão)
+                    local tween = tweenTo(targetPart.CFrame * CFrame.new(0, 7, 0))
+                    tween.Completed:Wait()
+                else
+                    -- Se estiver perto (menos de 15 studs), vira de frente e ataca
+                    hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(targetPart.Position.X, hrp.Position.Y, targetPart.Position.Z))
+                    attackAndUseSkills()
+                    task.wait(0.2)
                 end
             end
         end
+        task.wait(1)
     end
     
-    return closest
+    if noclipConnection then noclipConnection:Disconnect() end
 end
 
-local function getNearestIsland()
-    local char = LocalPlayer.Character
-    if not char then return ISLAND_CENTERS[1] end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return ISLAND_CENTERS[1] end
-    local currentPos = hrp.Position
-    
-    local nearestPos = ISLAND_CENTERS[1]
-    local minDistance = math.huge
-    
-    for _, pos in ipairs(ISLAND_CENTERS) do
-        local dist = (currentPos - pos).Magnitude
-        if dist < minDistance and dist > 300 then
-            minDistance = dist
-            nearestPos = pos
-        end
-    end
-    
-    return nearestPos
-end
-
--- // Loop Principal controlado pelo Botão
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        
-        if FARM_ACTIVE then
-            local targetData = getClosestPumpkin()
-            
-            if targetData and targetData.Object and targetData.Part and targetData.Object.Parent then
-                -- Posiciona o personagem perfeitamente a 2.5 studs acima (sem se enterrar na abóbora)
-                local targetPos = targetData.Part.Position + Vector3.new(0, 2.5, 0)
-                smoothTweenTo(targetPos)
-                
-                local startTime = tick()
-                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 4) do
-                    local char = LocalPlayer.Character
-                    if char and char:FindFirstChild("HumanoidRootPart") then
-                        char.HumanoidRootPart.CFrame = CFrame.new(targetPos)
-                    end
-                    
-                    forceClick() -- Dispara o soco real forçado por hardware simulado
-                    task.wait(0.08)
-                end
-            else
-                local nextIsland = getNearestIsland()
-                smoothTweenTo(nextIsland + Vector3.new(0, 15, 0))
-                task.wait(1)
-            end
-        end
-    end
-end)
+-- Inicia o script
+task.spawn(startPumpkinFarm)

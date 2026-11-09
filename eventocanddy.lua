@@ -7,10 +7,23 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local tweenSpeed = 300 -- Velocidade segura
 
--- Variável global para você poder parar o script depois se quiser
+-- Variável global para parar o script se precisar
 getgenv().FarmPumpkinAtivo = true
 
--- Sistema que anula a gravidade e desativa colisão (Corrige o bug de teleporte)
+-- Lista de nomes dos inimigos que saem da abóbora (Adicione outros se precisar)
+local monstrosHalloween = {"Ghost", "Wraith", "Skeleton", "Zombie", "Vampire"}
+
+local function isMonstroEvento(nome)
+    for _, monstro in ipairs(monstrosHalloween) do
+        -- Verifica se o nome do NPC contém o nome da lista
+        if string.find(nome, monstro) then 
+            return true 
+        end
+    end
+    return false
+end
+
+-- Sistema de Física (Anti-Borracha e Noclip)
 local noclipConnection
 local function setupPhysics()
     if noclipConnection then noclipConnection:Disconnect() end
@@ -19,14 +32,12 @@ local function setupPhysics()
         if char and char:FindFirstChild("HumanoidRootPart") then
             local hrp = char.HumanoidRootPart
             
-            -- Desativa a colisão de tudo (atravessar paredes)
             for _, part in pairs(char:GetDescendants()) do
                 if part:IsA("BasePart") and part.CanCollide then
                     part.CanCollide = false
                 end
             end
             
-            -- Cria a gravidade zero para o anti-cheat não te puxar de volta
             local bv = hrp:FindFirstChild("AntiBorracha")
             if not bv then
                 bv = Instance.new("BodyVelocity")
@@ -36,7 +47,6 @@ local function setupPhysics()
                 bv.Parent = hrp
             end
             
-            -- Zera a velocidade física do personagem para evitar pulos estranhos
             hrp.Velocity = Vector3.new(0, 0, 0)
         end
     end)
@@ -51,7 +61,7 @@ local function removePhysics()
     end
 end
 
--- Voo suave com Tween
+-- Voo suave
 local function tweenPara(targetCFrame)
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
@@ -67,22 +77,25 @@ local function tweenPara(targetCFrame)
     return tween
 end
 
--- Busca o inimigo mais próximo que surgiu da abóbora
+-- Busca APENAS os inimigos do evento
 local function getInimigoProximo()
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
     local hrp = char.HumanoidRootPart
     
     local closestEnemy = nil
-    local shortestDistance = 80 -- Raio de busca (só foca inimigos que surgiram perto)
+    local shortestDistance = 80
 
     if Workspace:FindFirstChild("Enemies") then
         for _, enemy in pairs(Workspace.Enemies:GetChildren()) do
             if enemy:FindFirstChild("Humanoid") and enemy.Humanoid.Health > 0 and enemy:FindFirstChild("HumanoidRootPart") then
-                local dist = (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
-                if dist < shortestDistance then
-                    shortestDistance = dist
-                    closestEnemy = enemy
+                -- O SEGREDO ESTÁ AQUI: Só foca se for monstro do evento
+                if isMonstroEvento(enemy.Name) then
+                    local dist = (hrp.Position - enemy.HumanoidRootPart.Position).Magnitude
+                    if dist < shortestDistance then
+                        shortestDistance = dist
+                        closestEnemy = enemy
+                    end
                 end
             end
         end
@@ -90,7 +103,7 @@ local function getInimigoProximo()
     return closestEnemy
 end
 
--- Busca a abóbora mais próxima
+-- Busca a abóbora
 local function getPumpkinProxima()
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
@@ -115,13 +128,11 @@ local function getPumpkinProxima()
     return closestPumpkin
 end
 
--- Simula os ataques (Cliques e Skills)
+-- Simula Ataques
 local function usarAtaques()
-    -- Clica o Mouse (M1)
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 1)
     VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 1)
     
-    -- Teclas Z, X, C, V
     local skills = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V}
     for _, key in ipairs(skills) do
         VirtualInputManager:SendKeyEvent(true, key, false, game)
@@ -129,7 +140,7 @@ local function usarAtaques()
     end
 end
 
--- Lógica central do Farm
+-- Lógica Principal
 local function iniciarFarm()
     setupPhysics()
 
@@ -141,26 +152,24 @@ local function iniciarFarm()
         end
         local hrp = char.HumanoidRootPart
 
-        -- PRIORIDADE 1: Tem inimigo vivo perto? Mata primeiro.
+        -- PRIORIDADE 1: Inimigo do evento vivo perto?
         local inimigo = getInimigoProximo()
         if inimigo then
             local enemyHrp = inimigo.HumanoidRootPart
             local dist = (hrp.Position - enemyHrp.Position).Magnitude
             
             if dist > 8 then
-                -- Fica um pouco acima do NPC para tomar menos dano
                 local tween = tweenPara(enemyHrp.CFrame * CFrame.new(0, 6, 0)) 
                 tween.Completed:Wait()
             else
-                -- Vira de frente para o NPC e ataca (importante para as skills acertarem)
                 hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(enemyHrp.Position.X, hrp.Position.Y, enemyHrp.Position.Z))
                 usarAtaques()
             end
-            task.wait(0.1) -- Delay seguro para não travar o Delta
+            task.wait(0.1)
             continue
         end
 
-        -- PRIORIDADE 2: Se não tem inimigo, vai para o Pumpkin
+        -- PRIORIDADE 2: Abóbora
         local pumpkin = getPumpkinProxima()
         if pumpkin then
             local targetPart = pumpkin.part
@@ -170,7 +179,6 @@ local function iniciarFarm()
                 local tween = tweenPara(targetPart.CFrame * CFrame.new(0, 7, 0))
                 tween.Completed:Wait()
             else
-                -- Vira para o Pumpkin e ataca
                 hrp.CFrame = CFrame.lookAt(hrp.Position, Vector3.new(targetPart.Position.X, hrp.Position.Y, targetPart.Position.Z))
                 usarAtaques()
             end
@@ -178,12 +186,10 @@ local function iniciarFarm()
             continue
         end
 
-        -- Se não achar nada, espera um pouco para procurar novamente
         task.wait(1)
     end
     
     removePhysics()
 end
 
--- Executa o farm
 task.spawn(iniciarFarm)

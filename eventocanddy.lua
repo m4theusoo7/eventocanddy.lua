@@ -84,7 +84,7 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 -- // ==========================================
--- // FUNÇÕES DE FARM E ATAQUE LIMPAS
+-- // FUNÇÕES DE FARM E BUSCA PRECISA
 -- // ==========================================
 
 local function bypassCollisions()
@@ -111,19 +111,6 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- Ativa o ataque da ferramenta sem invocar funções de stat inexistentes
-local function triggerAttack()
-    pcall(function()
-        Character = LocalPlayer.Character
-        if Character then
-            local tool = Character:FindFirstChildOfClass("Tool")
-            if tool then
-                tool:Activate()
-            end
-        end
-    end)
-end
-
 local function getClosestPumpkin()
     local closest = nil
     local shortestDist = math.huge
@@ -132,38 +119,28 @@ local function getClosestPumpkin()
     if not Character or not Character:FindFirstChild("HumanoidRootPart") then return nil end
     local currentPos = Character.HumanoidRootPart.Position
     
+    -- Varre apenas objetos ativos que sejam partes físicas reais no Workspace
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        local nameLower = string.lower(obj.Name)
-        
-        local isTarget = string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")
-        
-        local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
-        local grandParentName = obj.Parent and obj.Parent.Parent and string.lower(obj.Parent.Parent.Name) or ""
-        
-        local isStructureOrDoor = string.find(parentName, "door") or string.find(grandParentName, "door") or
-                                  string.find(parentName, "wall") or string.find(grandParentName, "wall") or
-                                  string.find(parentName, "house") or string.find(grandParentName, "house") or
-                                  string.find(parentName, "witch") or string.find(grandParentName, "witch") or
-                                  string.find(parentName, "npc") or string.find(parentName, "shop")
-        
-        if isTarget and not isStructureOrDoor then
-            local part = nil
-            if obj:IsA("Model") and obj.PrimaryPart then
-                part = obj.PrimaryPart
-            elseif obj:IsA("BasePart") then
-                part = obj
-            elseif obj:FindFirstChild("HumanoidRootPart") then
-                part = obj.HumanoidRootPart
-            elseif obj:FindFirstChildWhichIsA("BasePart") then
-                part = obj:FindFirstChildWhichIsA("BasePart")
-            end
+        if obj:IsA("BasePart") and not obj.Anchored then
+            local nameLower = string.lower(obj.Name)
             
-            if part then
-                if part.Size.Magnitude < 15 then
-                    local dist = (currentPos - part.Position).Magnitude
+            -- Identifica estritamente itens de evento reais e rejeita qualquer estrutura fixa, NPC ou parede
+            if (string.find(nameLower, "pumpkin") or string.find(nameLower, "abobora") or string.find(nameLower, "candy")) then
+                local fullNameLower = string.lower(obj:GetFullName())
+                
+                local isInvalid = string.find(fullNameLower, "witch") or 
+                                  string.find(fullNameLower, "npc") or 
+                                  string.find(fullNameLower, "shop") or 
+                                  string.find(fullNameLower, "wall") or 
+                                  string.find(fullNameLower, "door") or 
+                                  string.find(fullNameLower, "house") or
+                                  string.find(fullNameLower, "cauldron")
+                
+                if not isInvalid and obj.Size.Magnitude < 10 then
+                    local dist = (currentPos - obj.Position).Magnitude
                     if dist < shortestDist then
                         shortestDist = dist
-                        closest = {Object = obj, Part = part}
+                        closest = {Object = obj, Part = obj}
                     end
                 end
             end
@@ -201,14 +178,13 @@ task.spawn(function()
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part then
-                local targetPos = targetData.Part.Position + Vector3.new(0, 3, 0)
+                local targetPos = targetData.Part.Position + Vector3.new(0, 2, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Ataca ativando a ferramenta equipada de forma limpa até o item sumir
+                -- Aguarda o item ser coletado (desaparecer da memória do jogo) com timeout de segurança de 2 segundos
                 local startTime = tick()
-                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
-                    triggerAttack()
-                    task.wait(0.15)
+                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 2) do
+                    task.wait(0.05)
                 end
             else
                 local nextIsland = getNearestIsland()

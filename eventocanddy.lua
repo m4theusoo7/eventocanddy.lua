@@ -11,7 +11,7 @@ local tweenSpeed = 300 -- Velocidade segura
 getgenv().FarmPumpkinAtivo = true
 
 -- Lista de nomes dos inimigos que saem da abóbora (Adicione outros se precisar)
-local monstrosHalloween = {"Ghost", "Wraith", "Skeleton", "Zombie", "Vampire"}
+local monstrosHalloween = {"Ghost", "Wraith", "Skeleton", "Zombie", "Vampire", "Jack o' Lantern", "Pumpkin Snowman",}
 
 local function isMonstroEvento(nome)
     for _, monstro in ipairs(monstrosHalloween) do

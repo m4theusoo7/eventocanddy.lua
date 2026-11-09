@@ -3,7 +3,6 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
@@ -12,9 +11,6 @@ local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 -- // Parâmetros de Configuração
 local SPEED = 250
 local FARM_ACTIVE = false
-
--- // Remote oficial do Blox Fruits para interações/ataques no mundo
-local CommF = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("CommF_")
 
 -- // Lista de principais ilhas do Blox Fruits para transição
 local ISLAND_CENTERS = {
@@ -88,7 +84,7 @@ ToggleButton.MouseButton1Click:Connect(function()
 end)
 
 -- // ==========================================
--- // FUNÇÕES DE FARM E ATAQUE
+-- // FUNÇÕES DE FARM E ATAQUE LIMPAS
 -- // ==========================================
 
 local function bypassCollisions()
@@ -115,20 +111,14 @@ local function smoothTweenTo(targetPosition)
     tween.Completed:Wait()
 end
 
--- Função que ativa a ferramenta e força o ataque/dano no alvo
-local function causeDamage(targetPart)
+-- Ativa o ataque da ferramenta sem invocar funções de stat inexistentes
+local function triggerAttack()
     pcall(function()
         Character = LocalPlayer.Character
         if Character then
             local tool = Character:FindFirstChildOfClass("Tool")
             if tool then
                 tool:Activate()
-            end
-            -- Força o envio de dano/clique para o servidor na posição do item
-            if targetPart then
-                pcall(function()
-                    CommF:InvokeServer("AddPoint", targetPart.Position)
-                end)
             end
         end
     end)
@@ -214,10 +204,10 @@ task.spawn(function()
                 local targetPos = targetData.Part.Position + Vector3.new(0, 3, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Causa dano contínuo até o objeto sumir do Workspace
+                -- Ataca ativando a ferramenta equipada de forma limpa até o item sumir
                 local startTime = tick()
                 while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 3) do
-                    causeDamage(targetData.Part)
+                    triggerAttack()
                     task.wait(0.15)
                 end
             else

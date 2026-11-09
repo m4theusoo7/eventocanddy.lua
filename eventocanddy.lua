@@ -4,6 +4,7 @@ local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser") -- Adicionado para simular cliques de ataque
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -123,7 +124,6 @@ local function getClosestPumpkin()
     if not hrp then return nil end
     local currentPos = hrp.Position
     
-    -- Varre os objetos do Workspace (removido filtro de Anchored pois colecionáveis costumam ser fixos)
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") then
             local nameLower = string.lower(obj.Name)
@@ -174,22 +174,30 @@ local function getNearestIsland()
     return nearestPos
 end
 
+-- Função para simular o ataque (clique) na tela de forma otimizada
+local function attack()
+    VirtualUser:Button1Down(Vector2.new(0, 0))
+    VirtualUser:Button1Up(Vector2.new(0, 0))
+end
+
 -- // Loop Principal controlado pelo Botão
 task.spawn(function()
     while true do
-        task.wait(0.2)
+        task.wait(0.1) -- Loop um pouco mais rápido para detecção ágil
         
         if FARM_ACTIVE then
             local targetData = getClosestPumpkin()
             
             if targetData and targetData.Object and targetData.Part and targetData.Object.Parent then
-                local targetPos = targetData.Part.Position + Vector3.new(0, 2, 0)
+                -- Teleporta exatamente ao lado/em cima da abóbora para o ataque acertar
+                local targetPos = targetData.Part.Position + Vector3.new(0, 1, 0)
                 smoothTweenTo(targetPos)
                 
-                -- Aguarda o item sumir com verificação segura de Parent
+                -- Enquanto a abóbora existir e o farm estiver ativo, fica atacando sem parar
                 local startTime = tick()
-                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 2) do
-                    task.wait(0.05)
+                while FARM_ACTIVE and targetData.Object and targetData.Object.Parent and (tick() - startTime < 4) do
+                    attack() -- Executa o clique de ataque
+                    task.wait(0.08) -- Velocidade rápida de clique (pode reduzir se quiser mais rápido)
                 end
             else
                 -- Se não achar abóboras na ilha atual, viaja para a próxima
